@@ -1,15 +1,7 @@
 #include "Kinect.h"
 #include "Encoder.h"
 
-int test();
-
-void main(){
-	test();
-	system("PAUSE");
-	return;
-}
-
-int test()
+int main()
 {
 	int i, nb_test_frames;
 	DASHOutputFile *muxer;
@@ -22,6 +14,8 @@ int test()
 	int seg_dur_in_ms = 1000;
 	int seg_num = 1;
 	u32 data_size = width * height * 3;
+
+	float time = 0.0f;
 
 	u8 *data = (u8 *)malloc(data_size);
 	//make a white frame
@@ -46,9 +40,17 @@ int test()
 
 		//PTS is the frame number in this example
 
+		if (i == 0){
+			time = 0.0f;
+		}
+		else{
+			time = clock()/CLOCKS_PER_SEC;
+		}
+
 		// Update kinectFrameData 
 		kinect.update(&kinectFrame);
-		int res = muxer_encode(muxer, kinectFrame, data_size, i);
+
+		int res = muxer_encode(muxer, kinectFrame, data_size, i); // i <-> time?
 
 		//if frame is OK, write it
 		if (res) {
@@ -64,6 +66,8 @@ int test()
 				seg_num++;
 			}
 		}
+		//time = clock() - time;
+		printf("%f seconds\n", (float)time / CLOCKS_PER_SEC);
 	}
 
 	if (muxer->segment_started) {
@@ -72,4 +76,6 @@ int test()
 	muxer_delete(muxer);
 	free(data);
 	free(kinectFrame);
+
+	system("PAUSE");
 }

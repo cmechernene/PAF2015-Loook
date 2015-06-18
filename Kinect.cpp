@@ -35,12 +35,12 @@ void Kinect::update(unsigned char ** dest)
 {
 	if (m_pNuiSensor == NULL)
 		return;
-	printf("update\n");
+	//printf("update\n");
 	if (WaitForSingleObject(m_hNextColorFrameEvent, 0))
 	{
-		printf("debut process (kinect)\n");
+		//printf("debut process (kinect)\n");
 		process(dest);//permet de mettre à jour le process (detection de la video en couleur et squelette)
-		printf("sortie de process (kinect)\n");
+		//printf("sortie de process (kinect)\n");
 	}
 }
 
@@ -82,11 +82,16 @@ HRESULT Kinect::createFirstConnected()
 	{
 		// Initialize the Kinect and specify that we'll be using color AND SKELETON
 		hr = m_pNuiSensor->NuiInitialize(NUI_INITIALIZE_FLAG_USES_COLOR | NUI_INITIALIZE_FLAG_USES_SKELETON); //Added NUI_INITIALIZE_FLAG_USES_SKELETON
-		// if preivous line not working, use this HRESULT hr = m_pSensorChooser->GetSensor(NUI_INITIALIZE_FLAG_USES_DEPTH_AND_PLAYER_INDEX | NUI_INITIALIZE_FLAG_USES_COLOR, &m_pNuiSensor);
+		
+		
+		// if preivous line not working, use this :
+		// HRESULT hr = m_pSensorChooser->GetSensor(NUI_INITIALIZE_FLAG_USES_DEPTH_AND_PLAYER_INDEX | NUI_INITIALIZE_FLAG_USES_COLOR, &m_pNuiSensor);
+		
 		if (SUCCEEDED(hr))
 		{
 			// Create an event that will be signaled when color data is available
 			m_hNextColorFrameEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+			
 			//From Skeleton basics. Create an event that'll be signaled when skeleton data is available
 			m_hNextSkeletonEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 
@@ -101,11 +106,38 @@ HRESULT Kinect::createFirstConnected()
 
 			// Open a skeleton stream to receive skeleton data
 			hr = m_pNuiSensor->NuiSkeletonTrackingEnable(m_hNextSkeletonEvent, 0);
+
+#ifdef BACKGROUND
+			//Open depth image stream
+			hr = m_pNuiSensor->NuiImageStreamOpen(NUI_IMAGE_TYPE_DEPTH_AND_PLAYER_INDEX,
+				cDepthResolution,
+				0,
+				2,
+				m_hNextDepthFrameEvent,
+				&m_pDepthStreamHandle);
+
+			if (SUCEEDED(hr)){
+				//Open a color image stream
+				hr = m_pNuiSensor->NuiImageStreamOpen(
+					NUI_IMAGE_TYPE_COLOR,
+					cColorResolution,
+					0,
+					2,
+					m_hNextColorFrameEvent,
+					&m_pColorStreamHandle);
+			}
+			
+			if (SUCEEDED(hr)){
+				hr = m_pNuiSensor->NuiSkeletonTrackingEnable(m_hNextSkeletonFrameEvent, NUI_SKELETON_TRACKING_FLAG_ENABLE_IN_NEAR_RANGE);
+			}
+#endif
+
 		}
 		else
 		{
 			ResetEvent(m_hNextColorFrameEvent);
 			ResetEvent(m_hNextSkeletonEvent);
+			// BACKGROUND ResetEvent(m_hNextDepthFrameEvent);
 		}
 	}
 
@@ -126,16 +158,19 @@ HRESULT Kinect::process(unsigned char ** dest)
 	NUI_SKELETON_FRAME skeletonFrame = { 0 };
 
 	// Attempt to get the color frame
-	hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pColorStreamHandle, 200, &imageFrame);
+	hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pColorStreamHandle, 40, &imageFrame);
 	if (FAILED(hr))
 	{
-		printf("failed process\n");
+		static int nbFail = 0;
+			nbFail++;
+		printf("failed to process kinect [total failed : %d]\n", nbFail);
 		return hr;
 	}
 
 	INuiFrameTexture* pTexture = imageFrame.pFrameTexture;
 
-	printf("Length : %d, Pitch : %d\n", pTexture->BufferLen(), pTexture->Pitch());
+	// Length of the kinect color data buffer and number of bytes/line
+	//printf("Length : %d, Pitch : %d\n", pTexture->BufferLen(), pTexture->Pitch());
 
 	// Lock the frame data so the Kinect knows not to modify it while we're reading it
 	pTexture->LockRect(0, &m_LockedRect, NULL, 0);
@@ -315,3 +350,46 @@ void rgbaDataToYuv(unsigned char ** oldData, unsigned char ** newData){
 	return;
 }
 */
+
+// BACKGROUND Determine the player whom the background removed color stream should consider as foreground
+HRESULT Kinect::ChooseSkeleton(NUI_SKELETON_DATA* pSkeletonData){
+	HRESULT hr = S_OK;
+
+	// First we go through the stream to find the closest skeleton, and also check whether our current tracked
+	// skeleton is still visibile in the stream
+	float closestSkeletonDistance = FLT_MAX;
+	DWORD closestSkeleton = NUI_SKELETON_INVALID_TRACKING_ID;
+	BOOL isTrackedSkeletonVisible = false;
+	for (int i = 0; i < NUI_SKELETON_COUNT; ++i)
+	{
+		NUI_SKELETON_DATA skeleton = pSkeletonData[i];
+		if (NUI_SKELETON_TRACKED == skeleton.eTrackingState)
+		{
+			if (m_trackedSkeleton == skeleton.dwTrackingID)
+			{
+				isTrackedSkeletonVisible = true;
+				break;
+			}
+
+			if (skeleton.Position.z < closestSkeletonDistance)
+			{
+				closestSkeleton = skeleton.dwTrackingID;
+				closestSkeletonDistance = skeleton.Position.z;
+			}
+		}
+	}
+
+	// Now we choose a new skeleton unless the currently tracked skeleton is still visible
+	if (!isTrackedSkeletonVisible && closestSkeleton != NUI_SKELETON_INVALID_TRACKING_ID)
+	{
+		hr = m_pBackgroundRemovalStream->SetTrackedPlayer(closestSkeleton);
+		if (FAILED(hr))
+		{
+			return hr;
+		}
+
+		m_trackedSkeleton = closestSkeleton;
+	}
+
+	return hr;
+}

@@ -35,6 +35,9 @@ public:
 	void GetScreenshotFileName(wchar_t *screenshotName, UINT screenshotNameSize);
 	void rgbaDataToYuv(unsigned char ** oldData, unsigned char ** newData);
 
+	//Background specific added functions
+	HRESULT ChooseSkeleton(NUI_SKELETON_DATA* pSkeletonData);
+
 private:
 
 	NUI_LOCKED_RECT m_LockedRect;

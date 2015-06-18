@@ -168,7 +168,6 @@
     <ClInclude Include="Encoder.h" />
     <ClInclude Include="ImageRenderer.h" />
     <ClInclude Include="Kinect.h" />
-    <ClInclude Include="Muxer.h" />
     <ClInclude Include="PrintToPNG.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="ColorBasics.h" />
