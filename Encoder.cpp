@@ -356,15 +356,13 @@ static void build_dict(void *priv_data, const char *options) {
 	gf_free(opt);
 }
 
-DASHOutputFile *muxer_init(u32 frame_per_segment, u32 seg_dur_in_ms, u32 frame_dur, u32 gop_size, u32 width, u32 height, u32 bitrate, Bool input_rgb)
+DASHOutputFile *muxer_init(u32 seg_dur_in_ms, u32 frame_dur, u32 timescale, u32 gop_size, u32 width, u32 height, u32 bitrate, Bool input_rgb)
 {
 	DASHOutputFile *dasher;
 	GF_SAFEALLOC(dasher, DASHOutputFile);
 
 	dasher->sample = gf_isom_sample_new();
 	dasher->isof = NULL;
-
-	dasher->frame_per_segment = frame_per_segment;
 
 	dasher->seg_dur = seg_dur_in_ms;
 
@@ -401,8 +399,8 @@ DASHOutputFile *muxer_init(u32 frame_per_segment, u32 seg_dur_in_ms, u32 frame_d
 
 
 	//PAF_TODO: mettre les bonnes valeurs ici 
-	dasher->codec_ctx->time_base.num = 1;
-	dasher->codec_ctx->time_base.den = 30;
+	dasher->codec_ctx->time_base.num = frame_dur;
+	dasher->codec_ctx->time_base.den = timescale;
 
 	dasher->codec_ctx->pix_fmt = PIX_FMT_YUV420P;
 	dasher->codec_ctx->gop_size = 30;

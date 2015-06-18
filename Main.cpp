@@ -27,7 +27,7 @@ int main()
 	unsigned char * kinectFrame = (unsigned char *)malloc(data_size);
 
 	// Init DASHOutputFile : frame_per_segment, frame_dur, alloc avframe, alloc buffer, codec context, ...
-	muxer = muxer_init(30, seg_dur_in_ms, 1, 30, width, height, bitrate, GF_TRUE);
+	muxer = muxer_init(seg_dur_in_ms, 33333, 1000000, 30, width, height, bitrate, GF_TRUE);
 	if (!muxer) {
 		fprintf(stderr, "Error initializing muxer\n");
 		return 1;
@@ -56,7 +56,7 @@ int main()
 		if (res) {
 			//need to start the segment (this will generate the init segment on the first pass)
 			if (!muxer->segment_started) {
-				muxer_open_segment(muxer, "output", "seg210", seg_num);
+				muxer_open_segment(muxer, "output", "segJ", seg_num);
 			}
 
 			res = muxer_write_frame(muxer, i);

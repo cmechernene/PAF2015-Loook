@@ -11,7 +11,10 @@ Kinect::Kinect() : m_hNextColorFrameEvent(INVALID_HANDLE_VALUE), //sert a detect
 m_pColorStreamHandle(INVALID_HANDLE_VALUE),
 m_hNextSkeletonEvent(INVALID_HANDLE_VALUE), //sert a detecter un evenement squelette
 m_pSkeletonStreamHandle(INVALID_HANDLE_VALUE),
-m_pNuiSensor(NULL) //permet de choisir le capteur à utiliser (camera IR ou couleur)
+m_pNuiSensor(NULL), //permet de choisir le capteur à utiliser (camera IR ou couleur)
+m_trackedSkeleton(NUI_SKELETON_INVALID_TRACKING_ID), //Background
+m_pBackgroundRemovalStream(NULL) //Background
+
 {
 	createFirstConnected();
 }
@@ -150,19 +153,19 @@ HRESULT Kinect::createFirstConnected()
 	return hr;
 }
 
+HRESULT Kinect::processColor(unsigned char ** dest){
 
-HRESULT Kinect::process(unsigned char ** dest)
-{
 	HRESULT hr;
 	NUI_IMAGE_FRAME imageFrame;
-	NUI_SKELETON_FRAME skeletonFrame = { 0 };
+
+	LARGE_INTEGER colorTimeStamp; // Background : part of the color frame with removed background
 
 	// Attempt to get the color frame
 	hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pColorStreamHandle, 40, &imageFrame);
 	if (FAILED(hr))
 	{
 		static int nbFail = 0;
-			nbFail++;
+		nbFail++;
 		printf("failed to process kinect [total failed : %d]\n", nbFail);
 		return hr;
 	}
@@ -178,16 +181,16 @@ HRESULT Kinect::process(unsigned char ** dest)
 	if (m_LockedRect.Pitch != 0)
 	{
 		unsigned char * currFrame = (unsigned char *)m_LockedRect.pBits;
-		
+
 		// Convert RGBA to RGB
 		int j = 0;
 		for (int i = 0; i < cColorWidth * cColorHeight * 4; i += 4){
-			(*dest)[i-j] = currFrame[i+2];
-			(*dest)[i-j + 1] = currFrame[i+1];
-			(*dest)[i-j + 2] = currFrame[i];
+			(*dest)[i - j] = currFrame[i + 2];
+			(*dest)[i - j + 1] = currFrame[i + 1];
+			(*dest)[i - j + 2] = currFrame[i];
 			j++;
 		}
-		
+
 
 		// Conversion RGB -> YUV
 		//unsigned char * yuvData = (unsigned char *)malloc(cColorWidth * cColorHeight * 3);
@@ -209,13 +212,15 @@ HRESULT Kinect::process(unsigned char ** dest)
 		char name[1024];
 		sprintf(name, "image_%d.png", nb);
 		if (!stbi_write_png(name, 640, 480, 3, curr, 4*640)){
-			fprintf(stderr, "ERROR: could not write screenshot file %d\n", nb);
+		fprintf(stderr, "ERROR: could not write screenshot file %d\n", nb);
 		}
 		nb++;
 		printf("nb = %d\n", nb);
 		printf("fin conversion\n");
 		*/
 
+		// Background specific :
+//		HRESULT bg = m_pBackgroundRemovalStream->ProcessColor(cColorWidth*cColorHeight);
 	}
 
 	else
@@ -227,8 +232,22 @@ HRESULT Kinect::process(unsigned char ** dest)
 	// Release the frame
 	m_pNuiSensor->NuiImageStreamReleaseFrame(m_pColorStreamHandle, &imageFrame);
 
+	// Device lost, need to recreate the render target
+	// We'll dispose it now and retry drawing
+	m_pNuiSensor->NuiImageStreamReleaseFrame(m_pColorStreamHandle, &imageFrame);
+}
+
+
+HRESULT Kinect::process(unsigned char ** dest)
+{
+	HRESULT hr = true;
+	
+	processColor(dest);
+
 	//ICI s'arrete la capture de la video, le code qui suit concerne la capture du squelette
 	/*
+
+	NUI_SKELETON_FRAME skeletonFrame = { 0 };
 	hr = m_pNuiSensor->NuiSkeletonGetNextFrame(0, &skeletonFrame);
 	if (FAILED(hr))
 	{
@@ -248,9 +267,7 @@ HRESULT Kinect::process(unsigned char ** dest)
 		}
 	}
 	*/
-	// Device lost, need to recreate the render target
-	// We'll dispose it now and retry drawing
-	m_pNuiSensor->NuiImageStreamReleaseFrame(m_pColorStreamHandle, &imageFrame);
+
 	return hr;
 }
 

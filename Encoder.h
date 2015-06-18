@@ -70,8 +70,6 @@ typedef struct {
 	int vbuf_size;
 	int encoded_frame_size;
 
-	int frame_per_segment;
-
 	int seg_dur;
 
 	u64 first_dts_in_fragment;
@@ -94,7 +92,7 @@ typedef struct {
 } DASHOutputFile;
 
 /* Init muxer */
-DASHOutputFile *muxer_init(u32 frame_per_segment, u32 seg_dur_in_ms, u32 frame_dur, u32 gop_size, u32 width, u32 height, u32 bitrate, Bool input_rgb);
+DASHOutputFile *muxer_init(u32 seg_dur_in_ms, u32 frame_dur, u32 timescale, u32 gop_size, u32 width, u32 height, u32 bitrate, Bool input_rgb);
 
 /* Encode frame */
 int muxer_encode(DASHOutputFile *dasher, u8 *frame, u32 frame_size, u64 PTS);

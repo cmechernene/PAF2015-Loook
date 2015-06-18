@@ -7,6 +7,7 @@
 #include <fstream>
 #include "resource.h"
 #include <NuiApi.h>
+#include <KinectBackgroundRemoval.h> //Background
 
 
 class Kinect
@@ -30,6 +31,8 @@ public:
 	/// Handle new color and skeleton data
 	/// </summary>
 	HRESULT                    process(unsigned char ** dest);
+	HRESULT processColor(unsigned char ** dest);
+
 	void SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int windowWidth, int windowHeight);
 	HRESULT SaveBitmapToFile(BYTE* pBitmapBits, LONG lWidth, LONG lHeight, WORD wBitsPerPixel, LPCWSTR lpszFilePath);
 	void GetScreenshotFileName(wchar_t *screenshotName, UINT screenshotNameSize);
@@ -52,6 +55,10 @@ private:
 	//From Skeleton basics
 	HANDLE                  m_pSkeletonStreamHandle;
 	HANDLE                  m_hNextSkeletonEvent;
+
+	//Background Removal
+	DWORD					m_trackedSkeleton;
+	INuiBackgroundRemovedColorStream* m_pBackgroundRemovalStream;
 
 	static const int        cColorWidth = 640;
 	static const int        cColorHeight = 480;
