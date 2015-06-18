@@ -1,5 +1,5 @@
 #include "Kinect.h"
-#include "PrintToPNG.h"
+#include <sstream>
 
 using namespace std;
 
@@ -197,7 +197,7 @@ HRESULT Kinect::processColor(unsigned char ** dest){
 		//rgbaDataToYuv(&curr, &yuvData);
 
 		//enregistrement frame en BMP
-		/*
+		
 		printf("Debut BMP\n");
 		static int ctr = 0;
 		wchar_t buffer[256];
@@ -205,7 +205,7 @@ HRESULT Kinect::processColor(unsigned char ** dest){
 		SaveBitmapToFile(static_cast<BYTE *>(m_LockedRect.pBits), cColorWidth, cColorHeight, 32, buffer);
 		ctr++;
 		printf("Fin BMP\n");
-		*/
+		
 
 		/*printf("début conversion...\n");
 		static int nb = 0;
@@ -237,53 +237,82 @@ HRESULT Kinect::processColor(unsigned char ** dest){
 	m_pNuiSensor->NuiImageStreamReleaseFrame(m_pColorStreamHandle, &imageFrame);
 }
 
+HRESULT Kinect::processSkeleton(){
+	HRESULT hr;
+
+	NUI_SKELETON_FRAME skeletonFrame;
+	hr = m_pNuiSensor->NuiSkeletonGetNextFrame(0, &skeletonFrame);
+	if (FAILED(hr)){
+		return hr;
+	}
+
+	// Smooth the skeleton data ?
+	m_pNuiSensor->NuiTransformSmooth(&skeletonFrame, NULL);
+
+	for (int i = 0; i < NUI_SKELETON_COUNT; i++){
+		NUI_SKELETON_TRACKING_STATE trackingState = skeletonFrame.SkeletonData[i].eTrackingState;
+		if (NUI_SKELETON_TRACKED == trackingState){
+			//Draw the tracked skeleton
+			SaveSkeletonToFile(skeletonFrame.SkeletonData[i], 640, 480);
+		}
+	}
+}
+
 
 HRESULT Kinect::process(unsigned char ** dest)
 {
 	HRESULT hr = true;
 	
+	printf("\tProcess\n");
 	processColor(dest);
-
-	//ICI s'arrete la capture de la video, le code qui suit concerne la capture du squelette
-	/*
-
-	NUI_SKELETON_FRAME skeletonFrame = { 0 };
-	hr = m_pNuiSensor->NuiSkeletonGetNextFrame(0, &skeletonFrame);
-	if (FAILED(hr))
-	{
-		return hr;
-	}
-	// smooth out the skeleton data
-	m_pNuiSensor->NuiTransformSmooth(&skeletonFrame, NULL);
-
-	for (int i = 0; i < NUI_SKELETON_COUNT; ++i)
-	{
-		NUI_SKELETON_TRACKING_STATE trackingState = skeletonFrame.SkeletonData[i].eTrackingState;
-
-		if (NUI_SKELETON_TRACKED == trackingState)
-		{
-			// We're tracking the skeleton, draw it
-			SaveSkeletonToFile(skeletonFrame.SkeletonData[i], 640, 480); //pas sur pour le 640*480
-		}
-	}
-	*/
+	processSkeleton();
 
 	return hr;
 }
 
 void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int windowWidth, int windowHeight)
 {
-	RightHandX = (double)skel.SkeletonPositions[NUI_SKELETON_POSITION_HAND_RIGHT].x;
-	RightHandY = (double)skel.SkeletonPositions[NUI_SKELETON_POSITION_HAND_RIGHT].y;
+	printf("\t\tSaveSkeleton\n");
+	std::string boneNames[20];
+	std::ostringstream tmp;
+	std::ostringstream coordString;
+	std::ostringstream resultStream;
 
+	boneNames[0] = "Hip_Center";
+	boneNames[1] = "Spine";
+	boneNames[2] = "Shoulder_Center";
+	boneNames[3] = "Head";
+	boneNames[4] = "Shoulder_Left";
+	boneNames[5] = "Elbow_Left";
+	boneNames[6] = "Wrist_Left";
+	boneNames[7] = "Hand_Left";
+	boneNames[8] = "Shoulder_Right";
+	boneNames[9] = "Elbow_Right";
+	boneNames[10] = "Wrist_Right";
+	boneNames[11] = "Hand_Right";
+	boneNames[12] = "Hip_Left";
+	boneNames[13] = "Knee_Left";
+	boneNames[14] = "Ankle_Left";
+	boneNames[15] = "Foot_Left";
+	boneNames[16] = "Hip_Right";
+	boneNames[17] = "Knee_Right";
+	boneNames[18] = "Ankle_Right";
+	boneNames[19] = "Foot_Right";
+
+	resultStream << "{\"Skeleton\":[\n\t";
+
+	for (int i = 0; i < 20; i++){
+		coordString.str("");
+		tmp.str("");
+		coordString << "{\"X\": \"" << skel.SkeletonPositions[i].x << "\", \"Y\": \"" << skel.SkeletonPositions[i].y << "\", \"Z\": \"" << skel.SkeletonPositions[i].z << "\"}";
+		tmp << "\n\t{\n\t\"Name\":\"" << boneNames[i] << "\",\n\t\"Coordinates\":" << coordString.str() << "\n\t}\n\t";
+		resultStream << tmp.str();
+	}
+	resultStream << "\n]}";
 	ofstream myfile;
-	//myfile.open("skelcoordinates3.txt", ios_base::out | ios_base::app); //ouverture en écriture, à la fin du fichier TEST
-	myfile.open("skelcoordinates.txt", ios_base::out);
-
-		myfile << (skel.SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_LEFT].x) << " " << (skel.SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_LEFT].z - 2.0) << " " << (skel.SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_LEFT].y) << "\n";
-		myfile << (skel.SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].x) << " " << (skel.SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].z - 2.0) << " " << (skel.SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].y) << "\n";
-
-		myfile.close();
+	myfile.open("Coordinates.json", ios_base::out);
+	myfile << resultStream.str();
+	myfile.close();
 }
 
 HRESULT Kinect::SaveBitmapToFile(BYTE* pBitmapBits, LONG lWidth, LONG lHeight, WORD wBitsPerPixel, LPCWSTR lpszFilePath)

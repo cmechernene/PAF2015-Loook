@@ -30,8 +30,9 @@ public:
 	/// <summary>
 	/// Handle new color and skeleton data
 	/// </summary>
-	HRESULT                    process(unsigned char ** dest);
-	HRESULT processColor(unsigned char ** dest);
+	HRESULT                 process(unsigned char ** dest);
+	HRESULT					processColor(unsigned char ** dest);
+	HRESULT					processSkeleton();
 
 	void SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int windowWidth, int windowHeight);
 	HRESULT SaveBitmapToFile(BYTE* pBitmapBits, LONG lWidth, LONG lHeight, WORD wBitsPerPixel, LPCWSTR lpszFilePath);

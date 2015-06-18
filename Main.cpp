@@ -1,6 +1,6 @@
 #include "Kinect.h"
 #include "Encoder.h"
-
+/*
 int main()
 {
 	int i, nb_test_frames;
@@ -79,3 +79,4 @@ int main()
 
 	system("PAUSE");
 }
+*/
