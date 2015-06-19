@@ -1,22 +1,33 @@
 <html>
+<head>
+	<meta charset="utf-8" />
+	<title>PAF</title>
+</head>
+
 <body>
 
 
 <section>
+  <h3>PAF</h3>
+  
   <!--<video controls autoplay width="320" height="240"></video>-->
   <pre id="log"></pre>
+  
+  <video id="v" autoplay controls width="640" height="360"> </video>
+  
+  
 </section>
 
 
 <script>
   function onSourceOpen(videoTag, e) {
     var mediaSource = e.target;
-    var sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42c01f"');	
+    var sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42c01e"');	
     videoTag.addEventListener('seeking', onSeeking.bind(videoTag, mediaSource));
     videoTag.addEventListener('progress', onProgress.bind(videoTag, mediaSource));
     var initSegment = GetInitializationSegment();
     if (initSegment == null) {
-      console.log("acabou sem init!");
+      console.log("problem with initialization!");
       // Error fetching the initialization segment. Signal end of stream with an error.
       mediaSource.endOfStream("network");
       return;
@@ -28,12 +39,24 @@
     // Append some initial media data.
     appendNextMediaSegment(mediaSource);
   }
+  var open = new String('open');
+  var buffer_len = 0;
+  
+  function GetNextMediaSegment(){
+	var buffer = buffers[0];
+	buffers = buffers.slice(1);
+	console.log(buffers);
+	buffer_len = buffer_len + 1;
+	console.log(buffer_len);
+	return buffer;
+	}
+  var queue = [];
   function appendNextMediaSegment(mediaSource) {
     console.log("next media segment");
-    if (mediaSource.readyState == "ended") {
+    /*if (mediaSource.readyState == "ended") {
       console.log("ended");
       return;
-    }
+    }*/
     // If we have run out of stream data, then signal end of stream.
     /*if (!HaveMoreMediaSegments()) {
       console.log("no more media segment");
@@ -43,24 +66,30 @@
 	
 		
     var mediaSegment = GetNextMediaSegment();
-    if (!mediaSegment) {
+    /*if (!mediaSegment) {
       console.log("no media segment");
       // Error fetching the next media segment.
       mediaSource.endOfStream("network");
       return;
-    }
-	var queue = [];
+    }*/
+	
 	queue.push(mediaSegment);
+	if (mediaSource.sourceBuffers[0].updating){
 	mediaSource.sourceBuffers[0].addEventListener('updateend', function() {
 		if (queue.length)
 			mediaSource.sourceBuffers[0].appendBuffer(queue.shift());
 	}, false);
+	}else{
+		if (queue.length)
+			mediaSource.sourceBuffers[0].appendBuffer(queue.shift());
+	}
   }
   function onSeeking(mediaSource, e) {
     console.log("seek");
     var video = e.target;
     // Abort current segment append.
-    mediaSource.sourceBuffers[0].abort();
+	if (mediaSource.readyState==open)
+		mediaSource.sourceBuffers[0].abort();
     // Notify the media segment loading code to start fetching data at the
     // new playback position.
     SeekToMediaSegmentAt(video.currentTime);
@@ -72,12 +101,7 @@
     console.log("progress");
     appendNextMediaSegment(mediaSource);
   }
-</script>
 
-
-<video id="v" autoplay controls> </video>
-
-<script>
   var video = document.getElementById('v');
   window.MediaSource = window.MediaSource || window.WebKitMediaSource;
   var mediaSource = new MediaSource();
@@ -85,9 +109,7 @@
     mediaSource.addEventListener('sourceopen', onSourceOpen.bind(this, video));
     video.src = window.URL.createObjectURL(mediaSource);
   }, 1000);
-</script>
 
-<script>
 function load_playlist(url, callback) {
   var xhr = new XMLHttpRequest();
   xhr.addEventListener('load', function(e) {
@@ -115,7 +137,7 @@ var buffers = [];
 load_playlist('playlist.m3u8', function(playlist_urls) {
   for (var i = 0; i < playlist_urls.length; i++) {
     GET(playlist_urls[i], function(uInt8Array) {
-      var file = new Blob([uInt8Array], {type: 'video/webm'});
+      var file = new Blob([uInt8Array], {type: 'video/mp4'});
       var reader = new FileReader();
       reader.onload = function(e) {
         buffers.push(new Uint8Array(e.target.result));
@@ -131,13 +153,19 @@ function GetInitializationSegment() {
   buffers = buffers.slice(1);
   return buffer;
 }
-function HaveMoreMediaSegments() {
-  return false; //return buffers.length > 0;
-}
-var GetNextMediaSegment = GetInitializationSegment;
-</script>
 
-<script>
+
+function HaveMoreMediaSegments(){
+//return false; //return buffers.length > 0;
+return buffers.length > buffer_len;
+}
+
+//var GetNextMediaSegment = GetInitializationSegment;
+
+
+
+//var GetNextMediaSegment = GetInitializationSegment;
+
 function GET(url, callback) {
   var xhr = new XMLHttpRequest();
   xhr.open('GET', url, true);
