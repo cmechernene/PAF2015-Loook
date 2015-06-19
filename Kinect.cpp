@@ -36,17 +36,19 @@ Kinect::~Kinect()
 	m_pNuiSensor = NULL;
 }
 
-void Kinect::update(unsigned char ** dest, u64 * time, int i)
+HRESULT Kinect::update(unsigned char ** dest, u64 * time, int i)
 {
+	HRESULT hr = true;
 	if (m_pNuiSensor == NULL)
-		return;
-	//printf("update\n");
-	if (WaitForSingleObject(m_hNextColorFrameEvent, 0))
-	{
-		//printf("debut process (kinect)\n");
-		process(dest, time, i);//permet de mettre à jour le process (detection de la video en couleur et squelette)
-		//printf("sortie de process (kinect)\n");
-	}
+		return hr = E_FAIL;
+	printf("********************* update\n");
+	//if (WaitForSingleObject(m_hNextColorFrameEvent, 0))
+	//{
+		printf("debut process (kinect)\n");
+		hr = process(dest, time, i);//permet de mettre à jour le process (detection de la video en couleur et squelette)
+		printf("sortie de process (kinect)\n");
+	//}
+	return hr;
 }
 
 HRESULT Kinect::createFirstConnected()
@@ -157,7 +159,7 @@ HRESULT Kinect::createFirstConnected()
 
 HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 
-	printf("Process Color\n");
+	printf("\t\tProcess Color\n");
 	HRESULT hr;
 	// Glob var to skeleton conversion to rgb coordinates
 	//NUI_IMAGE_FRAME imageFrame;
@@ -170,7 +172,7 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 	{
 		static int nbFail = 0;
 		nbFail++;
-		printf("failed to process kinect [total failed : %d]\n", nbFail);
+		printf("\t\t\tfailed to process kinect color [total failed : %d]\n", nbFail);
 		return hr;
 	}
 
@@ -242,14 +244,13 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 	m_pNuiSensor->NuiImageStreamReleaseFrame(m_pColorStreamHandle, &imageFrame);
 }
 
-HRESULT Kinect::processSkeleton(int i){
+HRESULT Kinect::processSkeleton(int k){
 	HRESULT hr;
 
 	NUI_SKELETON_FRAME skeletonFrame;
-	hr = m_pNuiSensor->NuiSkeletonGetNextFrame(10, &skeletonFrame);
+	hr = m_pNuiSensor->NuiSkeletonGetNextFrame(30, &skeletonFrame);
 	if (FAILED(hr)){
-		printf("FAILED SKELETON\n");
-		return hr;
+		printf("\t\t\tFAILED SKELETON\n");
 	}
 
 	// Smooth the skeleton data ?
@@ -261,9 +262,12 @@ HRESULT Kinect::processSkeleton(int i){
 		NUI_SKELETON_TRACKING_STATE trackingState = skeletonFrame.SkeletonData[i].eTrackingState;
 		if (NUI_SKELETON_TRACKED == trackingState){
 			//Draw the tracked skeleton
-			SaveSkeletonToFile(skeletonFrame.SkeletonData[i], i);
+			printf("\t\t\t1 Skeleton tracked\n");
+			SaveSkeletonToFile(skeletonFrame.SkeletonData[i], k);
+			hr = 0;
 		}
 	}
+	return hr;
 }
 
 
@@ -273,7 +277,7 @@ HRESULT Kinect::process(unsigned char ** dest, u64 * time, int i)
 	
 	printf("\tProcess\n");
 	processColor(dest, time);
-	processSkeleton(i);
+	hr = processSkeleton(i);
 
 	return hr;
 }
@@ -304,7 +308,7 @@ void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j)
 	std::string dest = "";
 	std::ostringstream destination;
 
-	printf("\t\tSave Skeleton\n");
+	printf("\t\t\tSave Skeleton\n");
 	std::string boneNames[20];
 	std::ostringstream tmp;
 	std::ostringstream coordString;
@@ -348,13 +352,14 @@ void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j)
 	}
 	resultStream << "\n]}";
 	ofstream myfile;
-	//sprintf(dest, "\\output\\skelcoord\\Coordinates_%d.json", j);
-	destination << "\\output\\skelcoord\\Coordinates_" << j << ".json";
+	destination.str("");
+	destination << "output\\skelcoord\\Coordinates_" << j << ".json";
 	dest = destination.str();
 
-	myfile.open(dest.c_str(), ios_base::out);
+	myfile.open(dest);
 	if (myfile.is_open()){
 		myfile << resultStream.str();
+		printf("\t\t\twrote coordinates %d\n", j);
 		myfile.close();
 	}
 	else{

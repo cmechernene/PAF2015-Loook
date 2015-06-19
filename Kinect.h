@@ -23,7 +23,7 @@ public:
 	/// <summary>
 	/// Main processing function
 	/// </summary>
-	void                    update(unsigned char ** des, u64 * time, int i);
+	HRESULT                   update(unsigned char ** des, u64 * time, int i);
 
 	/// <summary>
 	/// Create the first connected Kinect found 

@@ -1,6 +1,8 @@
 #include "Kinect.h"
 #include "Encoder.h"
 #include "ScreenCapture.h"
+#include <sstream>
+#include <windows.h>
 
 int main()
 {
@@ -18,7 +20,8 @@ int main()
 	u64 sys_start;
 	u64 now;
 
-	char * fileDest; // Hold the name of the screenshot
+	std::ostringstream destStream;
+	std::string destName;
 	
 	u8 *data = (u8 *)malloc(data_size);
 
@@ -31,6 +34,7 @@ int main()
 	unsigned char * kinectFrame = (unsigned char *)malloc(data_size);
 
 	gf_sys_init(GF_FALSE);
+	//Sleep(500);
 
 	// Init DASHOutputFile : frame_per_segment, frame_dur, alloc avframe, alloc buffer, codec context, ...
 	// OLD muxer = muxer_init(seg_dur_in_ms, 33333, 1000000, 30, width, height, bitrate, GF_TRUE);
@@ -50,27 +54,27 @@ int main()
 		u64 pts;
 
 		// Update kinectFrameData 
-		kinect.update(&kinectFrame, &now, i);
+		HRESULT hr = kinect.update(&kinectFrame, &now, i);
 		pts = gf_sys_clock_high_res() - sys_start;
 
 		// OLD int res = muxer_encode(muxer, kinectFrame, data_size, pts);
 		int res = muxer_encode(muxer, kinectFrame, data_size, i);
-		
-		// fileDest = "C:\\Users\\Martin\\ColorBasics-D2D\\output\\screen\\i.png";
-		//sprintf(fileDest, "C:\\Users\\Martin\\ColorBasics-D2D\\output\\screen\\i%d.png", i);
-		//ScreenCapture(0, 0, 1920, 1080, fileDest);
 
 		//if frame is OK, write it
 		if (res) {
 			//need to start the segment (this will generate the init segment on the first pass)
 			if (!muxer->segment_started) {
-				muxer_open_segment(muxer, "output", "segJ", seg_num);
+				muxer_open_segment(muxer, "output", "seg", seg_num);
 			}
 
 			res = muxer_write_frame(muxer, i);
 			//function returns 1 if segment should be closed (duration exceeded) done with segment, close it
 			if (res == 1) {
 				muxer_close_segment(muxer);
+				destStream.str("");
+				destStream << "C:\\Users\\Martin\\ColorBasics-D2D\\output\\screen\\im_" << seg_num << ".png";
+				destName = destStream.str();
+				ScreenCapture(0, 0, 1920, 1080, (char *)destName.c_str());
 				seg_num++;
 			}
 		}
