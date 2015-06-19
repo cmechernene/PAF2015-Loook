@@ -6,6 +6,7 @@ using namespace std;
 double RightHandX;
 double RightHandY;
 
+NUI_IMAGE_FRAME imageFrame;
 
 Kinect::Kinect() : m_hNextColorFrameEvent(INVALID_HANDLE_VALUE), //sert a detecter un evenement camera video
 m_pColorStreamHandle(INVALID_HANDLE_VALUE),
@@ -34,7 +35,7 @@ Kinect::~Kinect()
 	m_pNuiSensor = NULL;
 }
 
-void Kinect::update(unsigned char ** dest)
+void Kinect::update(unsigned char ** dest, u64 * time)
 {
 	if (m_pNuiSensor == NULL)
 		return;
@@ -42,7 +43,7 @@ void Kinect::update(unsigned char ** dest)
 	if (WaitForSingleObject(m_hNextColorFrameEvent, 0))
 	{
 		//printf("debut process (kinect)\n");
-		process(dest);//permet de mettre à jour le process (detection de la video en couleur et squelette)
+		process(dest, time);//permet de mettre à jour le process (detection de la video en couleur et squelette)
 		//printf("sortie de process (kinect)\n");
 	}
 }
@@ -153,10 +154,11 @@ HRESULT Kinect::createFirstConnected()
 	return hr;
 }
 
-HRESULT Kinect::processColor(unsigned char ** dest){
+HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 
 	HRESULT hr;
-	NUI_IMAGE_FRAME imageFrame;
+	// Glob var to skeleton conversion to rgb coordinates
+	//NUI_IMAGE_FRAME imageFrame;
 
 	LARGE_INTEGER colorTimeStamp; // Background : part of the color frame with removed background
 
@@ -181,6 +183,7 @@ HRESULT Kinect::processColor(unsigned char ** dest){
 	if (m_LockedRect.Pitch != 0)
 	{
 		unsigned char * currFrame = (unsigned char *)m_LockedRect.pBits;
+		*time = gf_sys_clock_high_res();
 
 		// Convert RGBA to RGB
 		int j = 0;
@@ -197,7 +200,7 @@ HRESULT Kinect::processColor(unsigned char ** dest){
 		//rgbaDataToYuv(&curr, &yuvData);
 
 		//enregistrement frame en BMP
-		
+		/*
 		printf("Debut BMP\n");
 		static int ctr = 0;
 		wchar_t buffer[256];
@@ -205,7 +208,7 @@ HRESULT Kinect::processColor(unsigned char ** dest){
 		SaveBitmapToFile(static_cast<BYTE *>(m_LockedRect.pBits), cColorWidth, cColorHeight, 32, buffer);
 		ctr++;
 		printf("Fin BMP\n");
-		
+		*/
 
 		/*printf("début conversion...\n");
 		static int nb = 0;
@@ -259,24 +262,47 @@ HRESULT Kinect::processSkeleton(){
 }
 
 
-HRESULT Kinect::process(unsigned char ** dest)
+HRESULT Kinect::process(unsigned char ** dest, u64 * time)
 {
 	HRESULT hr = true;
 	
 	printf("\tProcess\n");
-	processColor(dest);
+	processColor(dest, time);
 	processSkeleton();
 
 	return hr;
 }
 
+void skelCoordToColorCoord(Vector4 skelCoords, LONG ** dest){
+	FLOAT * depthX;
+	FLOAT * depthY;
+	LONG * colorX;
+	LONG * colorY;
+	NuiTransformSkeletonToDepthImage(skelCoords, depthX, depthY);
+
+	NuiImageGetColorPixelCoordinatesFromDepthPixel(NUI_IMAGE_RESOLUTION_640x480, &(imageFrame.ViewArea),
+		*depthX, *depthY, 0, colorX, colorY);
+
+	(*dest)[0] = *colorX;
+	(*dest)[1] = *colorY;
+	return;
+}
+
 void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int windowWidth, int windowHeight)
 {
+
+	FLOAT depthX =0;
+	FLOAT depthY=0;
+	LONG colorX=0;
+	LONG colorY=0;
+
 	printf("\t\tSaveSkeleton\n");
 	std::string boneNames[20];
 	std::ostringstream tmp;
 	std::ostringstream coordString;
+	std::ostringstream colorString;
 	std::ostringstream resultStream;
+	LONG * res = (LONG *)malloc(2 * sizeof(LONG));
 
 	boneNames[0] = "Hip_Center";
 	boneNames[1] = "Spine";
@@ -304,16 +330,35 @@ void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int windowWidth,
 	for (int i = 0; i < 20; i++){
 		coordString.str("");
 		tmp.str("");
+		colorString.str("");
+		//skelCoordToColorCoord(skel.SkeletonPositions[i], &res);
+
+		NuiTransformSkeletonToDepthImage(skel.SkeletonPositions[i], &depthX, &depthY);
+
+		NuiImageGetColorPixelCoordinatesFromDepthPixel(NUI_IMAGE_RESOLUTION_640x480, &(imageFrame.ViewArea),
+			depthX, depthY, 0, &colorX, &colorY);
+
+		res[0] = colorX;
+		res[1] = colorY;
+
+		colorString << "{\"X: \"" << res[0] << "\", \"Y\" : \"" << res[1] << "\"}";
 		coordString << "{\"X\": \"" << skel.SkeletonPositions[i].x << "\", \"Y\": \"" << skel.SkeletonPositions[i].y << "\", \"Z\": \"" << skel.SkeletonPositions[i].z << "\"}";
-		tmp << "\n\t{\n\t\"Name\":\"" << boneNames[i] << "\",\n\t\"Coordinates\":" << coordString.str() << "\n\t}\n\t";
+		tmp << "\n\t{\n\t\"Name\":\"" << boneNames[i] << "\",\n\t\"Coordinates\":" << coordString.str() << ",\n\t\"Screen_Coordinates\":" << colorString.str() << "\n\t}\n\t";
 		resultStream << tmp.str();
 	}
 	resultStream << "\n]}";
 	ofstream myfile;
 	myfile.open("Coordinates.json", ios_base::out);
-	myfile << resultStream.str();
-	myfile.close();
+	if (myfile.is_open()){
+		myfile << resultStream.str();
+		myfile.close();
+	}
+	else{
+		printf("\nERROR OPENING FILE\n");
+	}
+	free(res);
 }
+
 
 HRESULT Kinect::SaveBitmapToFile(BYTE* pBitmapBits, LONG lWidth, LONG lHeight, WORD wBitsPerPixel, LPCWSTR lpszFilePath)
 {

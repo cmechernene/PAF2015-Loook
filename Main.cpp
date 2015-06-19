@@ -1,6 +1,6 @@
 #include "Kinect.h"
 #include "Encoder.h"
-/*
+
 int main()
 {
 	int i, nb_test_frames;
@@ -14,10 +14,11 @@ int main()
 	int seg_dur_in_ms = 1000;
 	int seg_num = 1;
 	u32 data_size = width * height * 3;
-
-	float time = 0.0f;
+	u64 sys_start;
+	u64 now;
 
 	u8 *data = (u8 *)malloc(data_size);
+
 	//make a white frame
 	//memset(data, 0xFF, data_size);
 
@@ -25,6 +26,8 @@ int main()
 
 	// Color data buffer
 	unsigned char * kinectFrame = (unsigned char *)malloc(data_size);
+
+	gf_sys_init(GF_FALSE);
 
 	// Init DASHOutputFile : frame_per_segment, frame_dur, alloc avframe, alloc buffer, codec context, ...
 	muxer = muxer_init(seg_dur_in_ms, 33333, 1000000, 30, width, height, bitrate, GF_TRUE);
@@ -35,22 +38,16 @@ int main()
 	//try to generate 4 seconds (eg 4 segments)
 	nb_test_frames = 30 * 4;
 
+	sys_start = gf_sys_clock_high_res();
+
 	for (i = 0; i<nb_test_frames; i++) {
-		//u64 now = gf_sys_clock_high_res();
-
-		//PTS is the frame number in this example
-
-		if (i == 0){
-			time = 0.0f;
-		}
-		else{
-			time = clock()/CLOCKS_PER_SEC;
-		}
+		u64 pts;
 
 		// Update kinectFrameData 
-		kinect.update(&kinectFrame);
+		kinect.update(&kinectFrame, &now);
+		pts = gf_sys_clock_high_res() - sys_start;
 
-		int res = muxer_encode(muxer, kinectFrame, data_size, i); // i <-> time?
+		int res = muxer_encode(muxer, kinectFrame, data_size, pts);
 
 		//if frame is OK, write it
 		if (res) {
@@ -66,8 +63,6 @@ int main()
 				seg_num++;
 			}
 		}
-		//time = clock() - time;
-		printf("%f seconds\n", (float)time / CLOCKS_PER_SEC);
 	}
 
 	if (muxer->segment_started) {
@@ -78,5 +73,5 @@ int main()
 	free(kinectFrame);
 
 	system("PAUSE");
+	gf_sys_close();
 }
-*/

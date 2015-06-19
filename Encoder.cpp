@@ -399,8 +399,8 @@ DASHOutputFile *muxer_init(u32 seg_dur_in_ms, u32 frame_dur, u32 timescale, u32 
 
 
 	//PAF_TODO: mettre les bonnes valeurs ici 
-	dasher->codec_ctx->time_base.num = frame_dur;
-	dasher->codec_ctx->time_base.den = timescale;
+	dasher->codec_ctx->time_base.num = frame_dur; 
+	dasher->codec_ctx->time_base.den = timescale; 
 
 	dasher->codec_ctx->pix_fmt = PIX_FMT_YUV420P;
 	dasher->codec_ctx->gop_size = 30;

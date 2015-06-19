@@ -29,7 +29,7 @@ HRESULT ScreenCapture(int x, int y, int width, int height, char *filename){
 
 	return hr;
 }
-
+/*
 void main(){
 	float time = clock();
 	char * fileDest = "C:\\Users\\Martin\\ColorBasics-D2D\\test.png";
@@ -39,3 +39,4 @@ void main(){
 	system("PAUSE");
 	return;
 }
+*/

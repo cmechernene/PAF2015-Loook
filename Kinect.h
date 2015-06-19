@@ -9,6 +9,9 @@
 #include <NuiApi.h>
 #include <KinectBackgroundRemoval.h> //Background
 
+extern "C"{
+#include <gpac/tools.h>
+}
 
 class Kinect
 {
@@ -19,7 +22,7 @@ public:
 	/// <summary>
 	/// Main processing function
 	/// </summary>
-	void                    update(unsigned char ** des);
+	void                    update(unsigned char ** des, u64 * time);
 
 	/// <summary>
 	/// Create the first connected Kinect found 
@@ -30,10 +33,11 @@ public:
 	/// <summary>
 	/// Handle new color and skeleton data
 	/// </summary>
-	HRESULT                 process(unsigned char ** dest);
-	HRESULT					processColor(unsigned char ** dest);
+	HRESULT                 process(unsigned char ** dest, u64 * time);
+	HRESULT					processColor(unsigned char ** dest, u64 * time);
 	HRESULT					processSkeleton();
 
+	void skelCoordToColorCoord(Vector4 skelCoords, LONG ** dest);
 	void SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int windowWidth, int windowHeight);
 	HRESULT SaveBitmapToFile(BYTE* pBitmapBits, LONG lWidth, LONG lHeight, WORD wBitsPerPixel, LPCWSTR lpszFilePath);
 	void GetScreenshotFileName(wchar_t *screenshotName, UINT screenshotNameSize);
