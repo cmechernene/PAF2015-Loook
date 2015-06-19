@@ -1,3 +1,6 @@
+#ifndef _ENCODER_H_
+#define _ENCODER_H_
+
 #define _CRT_SECURE_NO_WARNINGS // erreur sur snprintf
 
 #if defined(WIN32) && !defined(__MINGW32__)
@@ -116,3 +119,5 @@ int muxer_create_init_segment(DASHOutputFile *dasher, char *filename);
 int muxer_write_video_frame(DASHOutputFile *dasher);
 
 static void build_dict(void *priv_data, const char *options);
+
+#endif

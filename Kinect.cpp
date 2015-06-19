@@ -1,5 +1,6 @@
 #include "Kinect.h"
 #include <sstream>
+#include <strsafe.h>
 
 using namespace std;
 
@@ -35,7 +36,7 @@ Kinect::~Kinect()
 	m_pNuiSensor = NULL;
 }
 
-void Kinect::update(unsigned char ** dest, u64 * time)
+void Kinect::update(unsigned char ** dest, u64 * time, int i)
 {
 	if (m_pNuiSensor == NULL)
 		return;
@@ -43,7 +44,7 @@ void Kinect::update(unsigned char ** dest, u64 * time)
 	if (WaitForSingleObject(m_hNextColorFrameEvent, 0))
 	{
 		//printf("debut process (kinect)\n");
-		process(dest, time);//permet de mettre à jour le process (detection de la video en couleur et squelette)
+		process(dest, time, i);//permet de mettre à jour le process (detection de la video en couleur et squelette)
 		//printf("sortie de process (kinect)\n");
 	}
 }
@@ -156,6 +157,7 @@ HRESULT Kinect::createFirstConnected()
 
 HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 
+	printf("Process Color\n");
 	HRESULT hr;
 	// Glob var to skeleton conversion to rgb coordinates
 	//NUI_IMAGE_FRAME imageFrame;
@@ -240,12 +242,13 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 	m_pNuiSensor->NuiImageStreamReleaseFrame(m_pColorStreamHandle, &imageFrame);
 }
 
-HRESULT Kinect::processSkeleton(){
+HRESULT Kinect::processSkeleton(int i){
 	HRESULT hr;
 
 	NUI_SKELETON_FRAME skeletonFrame;
-	hr = m_pNuiSensor->NuiSkeletonGetNextFrame(0, &skeletonFrame);
+	hr = m_pNuiSensor->NuiSkeletonGetNextFrame(10, &skeletonFrame);
 	if (FAILED(hr)){
+		printf("FAILED SKELETON\n");
 		return hr;
 	}
 
@@ -253,42 +256,44 @@ HRESULT Kinect::processSkeleton(){
 	m_pNuiSensor->NuiTransformSmooth(&skeletonFrame, NULL);
 
 	for (int i = 0; i < NUI_SKELETON_COUNT; i++){
+
+		// Tests which skeleton is tracked -> sometimes we may not enter in the if block
 		NUI_SKELETON_TRACKING_STATE trackingState = skeletonFrame.SkeletonData[i].eTrackingState;
 		if (NUI_SKELETON_TRACKED == trackingState){
 			//Draw the tracked skeleton
-			SaveSkeletonToFile(skeletonFrame.SkeletonData[i], 640, 480);
+			SaveSkeletonToFile(skeletonFrame.SkeletonData[i], i);
 		}
 	}
 }
 
 
-HRESULT Kinect::process(unsigned char ** dest, u64 * time)
+HRESULT Kinect::process(unsigned char ** dest, u64 * time, int i)
 {
 	HRESULT hr = true;
 	
 	printf("\tProcess\n");
 	processColor(dest, time);
-	processSkeleton();
+	processSkeleton(i);
 
 	return hr;
 }
 
-void skelCoordToColorCoord(Vector4 skelCoords, LONG ** dest){
-	FLOAT * depthX;
-	FLOAT * depthY;
-	LONG * colorX;
-	LONG * colorY;
-	NuiTransformSkeletonToDepthImage(skelCoords, depthX, depthY);
+void Kinect:: skelCoordToColorCoord(Vector4 skelCoords, LONG ** dest){
+	FLOAT  depthX=0;
+	FLOAT  depthY=0;
+	LONG  colorX=0;
+	LONG  colorY=0;
+	NuiTransformSkeletonToDepthImage(skelCoords, &depthX, &depthY);
 
 	NuiImageGetColorPixelCoordinatesFromDepthPixel(NUI_IMAGE_RESOLUTION_640x480, &(imageFrame.ViewArea),
-		*depthX, *depthY, 0, colorX, colorY);
+		depthX, depthY, 0, &colorX, &colorY);
 
-	(*dest)[0] = *colorX;
-	(*dest)[1] = *colorY;
+	(*dest)[0] = colorX;
+	(*dest)[1] = colorY;
 	return;
 }
 
-void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int windowWidth, int windowHeight)
+void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j)
 {
 
 	FLOAT depthX =0;
@@ -296,7 +301,10 @@ void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int windowWidth,
 	LONG colorX=0;
 	LONG colorY=0;
 
-	printf("\t\tSaveSkeleton\n");
+	std::string dest = "";
+	std::ostringstream destination;
+
+	printf("\t\tSave Skeleton\n");
 	std::string boneNames[20];
 	std::ostringstream tmp;
 	std::ostringstream coordString;
@@ -331,15 +339,7 @@ void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int windowWidth,
 		coordString.str("");
 		tmp.str("");
 		colorString.str("");
-		//skelCoordToColorCoord(skel.SkeletonPositions[i], &res);
-
-		NuiTransformSkeletonToDepthImage(skel.SkeletonPositions[i], &depthX, &depthY);
-
-		NuiImageGetColorPixelCoordinatesFromDepthPixel(NUI_IMAGE_RESOLUTION_640x480, &(imageFrame.ViewArea),
-			depthX, depthY, 0, &colorX, &colorY);
-
-		res[0] = colorX;
-		res[1] = colorY;
+		skelCoordToColorCoord(skel.SkeletonPositions[i], &res);
 
 		colorString << "{\"X: \"" << res[0] << "\", \"Y\" : \"" << res[1] << "\"}";
 		coordString << "{\"X\": \"" << skel.SkeletonPositions[i].x << "\", \"Y\": \"" << skel.SkeletonPositions[i].y << "\", \"Z\": \"" << skel.SkeletonPositions[i].z << "\"}";
@@ -348,7 +348,11 @@ void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int windowWidth,
 	}
 	resultStream << "\n]}";
 	ofstream myfile;
-	myfile.open("Coordinates.json", ios_base::out);
+	//sprintf(dest, "\\output\\skelcoord\\Coordinates_%d.json", j);
+	destination << "\\output\\skelcoord\\Coordinates_" << j << ".json";
+	dest = destination.str();
+
+	myfile.open(dest.c_str(), ios_base::out);
 	if (myfile.is_open()){
 		myfile << resultStream.str();
 		myfile.close();

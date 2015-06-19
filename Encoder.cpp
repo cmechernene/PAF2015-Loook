@@ -197,6 +197,7 @@ int muxer_create_init_segment(DASHOutputFile *dasher, char *filename)
 		GF_LOG(GF_LOG_ERROR, GF_LOG_DASH, ("%s: gf_isom_finalize_for_fragment\n", gf_error_to_string(ret)));
 		return -1;
 	}
+	fprintf(stderr, "Codec params : %s\n", dasher->codec6381);
 
 	return 0;
 }
@@ -399,8 +400,8 @@ DASHOutputFile *muxer_init(u32 seg_dur_in_ms, u32 frame_dur, u32 timescale, u32 
 
 
 	//PAF_TODO: mettre les bonnes valeurs ici 
-	dasher->codec_ctx->time_base.num = frame_dur; 
-	dasher->codec_ctx->time_base.den = timescale; 
+	dasher->codec_ctx->time_base.num = 1;//frame_dur; 
+	dasher->codec_ctx->time_base.den = 30;//timescale; 
 
 	dasher->codec_ctx->pix_fmt = PIX_FMT_YUV420P;
 	dasher->codec_ctx->gop_size = 30;

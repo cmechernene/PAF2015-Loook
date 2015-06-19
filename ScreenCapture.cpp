@@ -1,6 +1,8 @@
 #include "ScreenCapture.h"
 
 HRESULT ScreenCapture(int x, int y, int width, int height, char *filename){
+
+	printf("Capturing screen");
 	// get a Device Context
 	HDC dCHandler = CreateCompatibleDC(0);
 

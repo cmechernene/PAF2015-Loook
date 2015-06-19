@@ -3,9 +3,10 @@
 //     Copyright (c) Microsoft Corporation.  All rights reserved.
 // </copyright>
 //------------------------------------------------------------------------------
-
+/*
 #include "stdafx.h"
 #include "ImageRenderer.h"
+*/
 /*
 /// <summary>
 /// Constructor

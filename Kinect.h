@@ -1,8 +1,9 @@
+#ifndef _KINECT_H_
+#define _KINECT_H_
+
 #pragma once
 
 #include <Windows.h>
-//#include <glew.h>
-#include <strsafe.h>
 #include <iostream>
 #include <fstream>
 #include "resource.h"
@@ -22,7 +23,7 @@ public:
 	/// <summary>
 	/// Main processing function
 	/// </summary>
-	void                    update(unsigned char ** des, u64 * time);
+	void                    update(unsigned char ** des, u64 * time, int i);
 
 	/// <summary>
 	/// Create the first connected Kinect found 
@@ -33,12 +34,12 @@ public:
 	/// <summary>
 	/// Handle new color and skeleton data
 	/// </summary>
-	HRESULT                 process(unsigned char ** dest, u64 * time);
+	HRESULT                 process(unsigned char ** dest, u64 * time, int i);
 	HRESULT					processColor(unsigned char ** dest, u64 * time);
-	HRESULT					processSkeleton();
+	HRESULT					processSkeleton(int i);
 
 	void skelCoordToColorCoord(Vector4 skelCoords, LONG ** dest);
-	void SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int windowWidth, int windowHeight);
+	void SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int i);
 	HRESULT SaveBitmapToFile(BYTE* pBitmapBits, LONG lWidth, LONG lHeight, WORD wBitsPerPixel, LPCWSTR lpszFilePath);
 	void GetScreenshotFileName(wchar_t *screenshotName, UINT screenshotNameSize);
 	void rgbaDataToYuv(unsigned char ** oldData, unsigned char ** newData);
@@ -72,4 +73,4 @@ private:
 
 	static const int        cStatusMessageMaxLen = MAX_PATH * 2;
 };
-
+#endif

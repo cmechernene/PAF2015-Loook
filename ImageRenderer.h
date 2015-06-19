@@ -5,7 +5,7 @@
 //------------------------------------------------------------------------------
 
 // Manages the drawing of image data
-
+/*
 #pragma once
 
 #include <d2d1.h>
@@ -66,4 +66,4 @@ private:
     /// Dispose of Direct2d resources 
     /// </summary>
     void DiscardResources( );
-};
+};*/
