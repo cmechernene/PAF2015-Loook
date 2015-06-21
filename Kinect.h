@@ -42,10 +42,12 @@ public:
 	void SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int i);
 	HRESULT SaveBitmapToFile(BYTE* pBitmapBits, LONG lWidth, LONG lHeight, WORD wBitsPerPixel, LPCWSTR lpszFilePath);
 	void GetScreenshotFileName(wchar_t *screenshotName, UINT screenshotNameSize);
-	void rgbaDataToYuv(unsigned char ** oldData, unsigned char ** newData);
 
 	//Background specific added functions
 	HRESULT ChooseSkeleton(NUI_SKELETON_DATA* pSkeletonData);
+	HRESULT Kinect::ComposeImage();
+	HRESULT Kinect::processDepth();
+	HRESULT Kinect::createBackgroundRemovedColorStream();
 
 private:
 
@@ -63,8 +65,17 @@ private:
 	HANDLE                  m_hNextSkeletonEvent;
 
 	//Background Removal
+	UINT                               m_depthWidth;
+	UINT                               m_depthHeight;
 	DWORD					m_trackedSkeleton;
 	INuiBackgroundRemovedColorStream* m_pBackgroundRemovalStream;
+	HANDLE					m_pDepthStreamHandle;
+	HANDLE					m_hNextDepthFrameEvent;
+	HANDLE					m_hNextBackgroundRemovedFrameEvent;
+
+	BYTE*                              m_backgroundRGBX;
+	BYTE*                              m_outputRGBX;
+
 
 	static const int        cColorWidth = 640;
 	static const int        cColorHeight = 480;

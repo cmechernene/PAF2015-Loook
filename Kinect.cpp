@@ -4,9 +4,6 @@
 
 using namespace std;
 
-double RightHandX;
-double RightHandY;
-
 NUI_IMAGE_FRAME imageFrame;
 
 Kinect::Kinect() : m_hNextColorFrameEvent(INVALID_HANDLE_VALUE), //sert a detecter un evenement camera video
@@ -15,15 +12,36 @@ m_hNextSkeletonEvent(INVALID_HANDLE_VALUE), //sert a detecter un evenement squel
 m_pSkeletonStreamHandle(INVALID_HANDLE_VALUE),
 m_pNuiSensor(NULL), //permet de choisir le capteur à utiliser (camera IR ou couleur)
 m_trackedSkeleton(NUI_SKELETON_INVALID_TRACKING_ID), //Background
-m_pBackgroundRemovalStream(NULL) //Background
+m_pBackgroundRemovalStream(NULL), //Background
+m_pDepthStreamHandle(INVALID_HANDLE_VALUE), // Background
+m_hNextDepthFrameEvent(INVALID_HANDLE_VALUE), // Background
+m_hNextBackgroundRemovedFrameEvent(INVALID_HANDLE_VALUE) // Background
 
 {
+	// create heap storage for depth pixel data in RGBX format
+	m_outputRGBX = new BYTE[640 * 480 * 4];
+	m_backgroundRGBX = new BYTE[640 * 480 * 4];
+
+	// Background create white picture
+	for (int i = 0; i < 640 * 480 * 4; i += 4){
+		m_backgroundRGBX[i] = 255;
+		m_backgroundRGBX[i + 1] = 255;
+		m_backgroundRGBX[i + 2] = 255;
+		m_backgroundRGBX[i + 3] = 120;
+	}
+
 	createFirstConnected();
+	createBackgroundRemovedColorStream(); // Background removal
 }
 
 
 Kinect::~Kinect()
 {
+
+	// clean up arrays
+	delete[] m_outputRGBX;
+	delete[] m_backgroundRGBX;
+
 	if (m_pNuiSensor)
 		m_pNuiSensor->NuiShutdown(); // éteint la caméra de la kinect
 
@@ -32,6 +50,9 @@ Kinect::~Kinect()
 
 	if (m_hNextSkeletonEvent && (m_hNextSkeletonEvent != INVALID_HANDLE_VALUE))
 		CloseHandle(m_hNextSkeletonEvent);
+
+	CloseHandle(m_hNextBackgroundRemovedFrameEvent);
+	CloseHandle(m_hNextDepthFrameEvent);
 
 	m_pNuiSensor = NULL;
 }
@@ -87,21 +108,36 @@ HRESULT Kinect::createFirstConnected()
 
 	if (m_pNuiSensor != NULL)
 	{
+		printf("Sensor found [CreateFirstConnected]\n");
 		// Initialize the Kinect and specify that we'll be using color AND SKELETON
-		hr = m_pNuiSensor->NuiInitialize(NUI_INITIALIZE_FLAG_USES_COLOR | NUI_INITIALIZE_FLAG_USES_SKELETON); //Added NUI_INITIALIZE_FLAG_USES_SKELETON
 		
+		
+		// NO BACKGROUND
+		//hr = m_pNuiSensor->NuiInitialize(NUI_INITIALIZE_FLAG_USES_COLOR | NUI_INITIALIZE_FLAG_USES_SKELETON); //Added NUI_INITIALIZE_FLAG_USES_SKELETON
+		
+		//WITH BACKGROUND
+		hr = m_pNuiSensor->NuiInitialize(NUI_INITIALIZE_FLAG_USES_DEPTH_AND_PLAYER_INDEX | NUI_INITIALIZE_FLAG_USES_COLOR);
+
 		
 		// if preivous line not working, use this :
 		// HRESULT hr = m_pSensorChooser->GetSensor(NUI_INITIALIZE_FLAG_USES_DEPTH_AND_PLAYER_INDEX | NUI_INITIALIZE_FLAG_USES_COLOR, &m_pNuiSensor);
 		
 		if (SUCCEEDED(hr))
 		{
+			printf("Creating events [CreateFirstConnected]\n");
 			// Create an event that will be signaled when color data is available
 			m_hNextColorFrameEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 			
 			//From Skeleton basics. Create an event that'll be signaled when skeleton data is available
 			m_hNextSkeletonEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 
+			// Background. Event that will be signaled when depth data is available
+			m_hNextDepthFrameEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+
+			// Background : Event that will be signaled when the segmentation frame is ready
+			m_hNextBackgroundRemovedFrameEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+/*
+#ifndef BACKGROUND
 			// Open a color image stream to receive color frames
 			hr = m_pNuiSensor->NuiImageStreamOpen(
 				NUI_IMAGE_TYPE_COLOR, // signifie qu'on utilise le RGB. Autres possibilités: https://msdn.microsoft.com/en-us/library/nuiimagecamera.nui_image_type.aspx
@@ -113,38 +149,41 @@ HRESULT Kinect::createFirstConnected()
 
 			// Open a skeleton stream to receive skeleton data
 			hr = m_pNuiSensor->NuiSkeletonTrackingEnable(m_hNextSkeletonEvent, 0);
-
-#ifdef BACKGROUND
+#endif
+*/
+//#ifdef BACKGROUND
 			//Open depth image stream
 			hr = m_pNuiSensor->NuiImageStreamOpen(NUI_IMAGE_TYPE_DEPTH_AND_PLAYER_INDEX,
-				cDepthResolution,
+				NUI_IMAGE_RESOLUTION_320x240,
 				0,
 				2,
 				m_hNextDepthFrameEvent,
 				&m_pDepthStreamHandle);
 
-			if (SUCEEDED(hr)){
+			if (SUCCEEDED(hr)){
 				//Open a color image stream
+				printf("Opening a color image stream\n");
 				hr = m_pNuiSensor->NuiImageStreamOpen(
 					NUI_IMAGE_TYPE_COLOR,
-					cColorResolution,
+					NUI_IMAGE_RESOLUTION_640x480,
 					0,
 					2,
 					m_hNextColorFrameEvent,
 					&m_pColorStreamHandle);
 			}
 			
-			if (SUCEEDED(hr)){
-				hr = m_pNuiSensor->NuiSkeletonTrackingEnable(m_hNextSkeletonFrameEvent, NUI_SKELETON_TRACKING_FLAG_ENABLE_IN_NEAR_RANGE);
+			if (SUCCEEDED(hr)){
+				printf("Enabling the skeleton tracking\n");
+				hr = m_pNuiSensor->NuiSkeletonTrackingEnable(m_hNextSkeletonEvent, NUI_SKELETON_TRACKING_FLAG_ENABLE_IN_NEAR_RANGE);
 			}
-#endif
+//#endif
 
 		}
 		else
 		{
 			ResetEvent(m_hNextColorFrameEvent);
 			ResetEvent(m_hNextSkeletonEvent);
-			// BACKGROUND ResetEvent(m_hNextDepthFrameEvent);
+			ResetEvent(m_hNextDepthFrameEvent); // BACKGROUND 
 		}
 	}
 
@@ -157,14 +196,81 @@ HRESULT Kinect::createFirstConnected()
 	return hr;
 }
 
+HRESULT Kinect::createBackgroundRemovedColorStream(){
+	HRESULT hr;
+	if (NULL == m_pNuiSensor){
+		return E_FAIL;
+	}
+
+	hr = NuiCreateBackgroundRemovedColorStream(m_pNuiSensor, &m_pBackgroundRemovalStream);
+	if (FAILED(hr)){
+		printf("Failed to createBackgroundRemovedColorStream\n");
+		return hr;
+	}
+
+	hr = m_pBackgroundRemovalStream->Enable(NUI_IMAGE_RESOLUTION_640x480, NUI_IMAGE_RESOLUTION_320x240, m_hNextBackgroundRemovedFrameEvent);
+	return hr;
+}
+
+// Background : Compose the background removed color image with the background image
+HRESULT Kinect::ComposeImage(){
+	HRESULT hr;
+	NUI_BACKGROUND_REMOVED_COLOR_FRAME removedFrame;
+
+	// Gets the next frame of data from the background removed color stream
+	hr = m_pBackgroundRemovalStream->GetNextFrame(0, &removedFrame);
+	if (FAILED(hr)){
+		printf("FAILED getting the next background removed color frame\n");
+		return hr;
+	}
+
+	// Gets a pointer to the first byte of the background removed color frame
+	const BYTE* pBackgroundRemovedColor = removedFrame.pBackgroundRemovedColorData;
+
+	// 4 = bytes per pixel
+	int dataLength = static_cast<int>(cColorWidth)* static_cast<int>(cColorHeight)* 4;
+	BYTE alpha = 0;
+	
+	for (int i = 0; i < dataLength; ++i){
+		if (i % 4 == 0){
+			// gets the alpha value of the current pixel
+			alpha = pBackgroundRemovedColor[i + 3]; 
+		}
+		if (i % 4 != 3){
+			//blending
+			m_outputRGBX[i] = static_cast<BYTE>((UCHAR_MAX - alpha)*m_backgroundRGBX[i] 
+				+ alpha*pBackgroundRemovedColor[i]) / UCHAR_MAX;
+		}
+	}
+
+	printf("Debut BMP\n");
+	static int ctr = 0;
+	wchar_t buffer[256];
+	std::swprintf(buffer, sizeof(buffer) / sizeof(*buffer), L"backgroundRemoved_%d.bmp", ctr);
+	SaveBitmapToFile(static_cast<BYTE *>(m_outputRGBX), cColorWidth, cColorHeight, 32, buffer);
+	ctr++;
+	printf("Fin BMP\n");
+
+	hr = m_pBackgroundRemovalStream->ReleaseFrame(&removedFrame);
+	if (FAILED(hr)){
+		return hr;
+	}
+
+	//hr = m_pDrawBackgroundRemovalBasics->Draw(m_outputRGBX, cColorHeight * cColorWidth * 4);
+
+}
+
 HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 
 	printf("\t\tProcess Color\n");
 	HRESULT hr;
+	HRESULT bghr;
 	// Glob var to skeleton conversion to rgb coordinates
 	//NUI_IMAGE_FRAME imageFrame;
 
-	LARGE_INTEGER colorTimeStamp; // Background : part of the color frame with removed background
+	// Background : part of the color frame with removed background
+	LARGE_INTEGER colorTimeStamp;
+
 
 	// Attempt to get the color frame
 	hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pColorStreamHandle, 40, &imageFrame);
@@ -175,6 +281,8 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 		printf("\t\t\tfailed to process kinect color [total failed : %d]\n", nbFail);
 		return hr;
 	}
+
+	colorTimeStamp = imageFrame.liTimeStamp;
 
 	INuiFrameTexture* pTexture = imageFrame.pFrameTexture;
 
@@ -198,6 +306,12 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 			j++;
 		}
 
+
+		bghr = m_pBackgroundRemovalStream->ProcessColor(cColorHeight*cColorHeight * 4, m_LockedRect.pBits, colorTimeStamp);
+		if (FAILED(bghr)){
+			printf("FAILED processing color data\n");
+			return bghr;
+		}
 
 		// Conversion RGB -> YUV
 		//unsigned char * yuvData = (unsigned char *)malloc(cColorWidth * cColorHeight * 3);
@@ -225,9 +339,6 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 		printf("nb = %d\n", nb);
 		printf("fin conversion\n");
 		*/
-
-		// Background specific :
-//		HRESULT bg = m_pBackgroundRemovalStream->ProcessColor(cColorWidth*cColorHeight);
 	}
 
 	else
@@ -239,9 +350,6 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 	// Release the frame
 	m_pNuiSensor->NuiImageStreamReleaseFrame(m_pColorStreamHandle, &imageFrame);
 
-	// Device lost, need to recreate the render target
-	// We'll dispose it now and retry drawing
-	m_pNuiSensor->NuiImageStreamReleaseFrame(m_pColorStreamHandle, &imageFrame);
 }
 
 HRESULT Kinect::processSkeleton(int k){
@@ -251,22 +359,91 @@ HRESULT Kinect::processSkeleton(int k){
 	hr = m_pNuiSensor->NuiSkeletonGetNextFrame(30, &skeletonFrame);
 	if (FAILED(hr)){
 		printf("\t\t\tFAILED SKELETON\n");
+		return hr;
 	}
 
 	// Smooth the skeleton data ?
-	m_pNuiSensor->NuiTransformSmooth(&skeletonFrame, NULL);
+	//m_pNuiSensor->NuiTransformSmooth(&skeletonFrame, NULL);
 
+	// Holds skeleton data
+	NUI_SKELETON_DATA * skeletonData = skeletonFrame.SkeletonData;
+
+	//Choose the skeleton that we need to remove the background. May replace the for loop?
+	hr = ChooseSkeleton(skeletonData);
+	if (FAILED(hr)){
+		printf("FAILED To choose skeleton\n");
+		return hr;
+	}
+
+	// Background removal processing
+	hr = m_pBackgroundRemovalStream->ProcessSkeleton(
+		NUI_SKELETON_COUNT, skeletonData, skeletonFrame.liTimeStamp);
+
+
+	// Saving skel coordinates
 	for (int i = 0; i < NUI_SKELETON_COUNT; i++){
 
 		// Tests which skeleton is tracked -> sometimes we may not enter in the if block
-		NUI_SKELETON_TRACKING_STATE trackingState = skeletonFrame.SkeletonData[i].eTrackingState;
+		NUI_SKELETON_TRACKING_STATE trackingState = skeletonData[i].eTrackingState;
 		if (NUI_SKELETON_TRACKED == trackingState){
 			//Draw the tracked skeleton
 			printf("\t\t\t1 Skeleton tracked\n");
-			SaveSkeletonToFile(skeletonFrame.SkeletonData[i], k);
+			SaveSkeletonToFile(skeletonData[i], k);
 			hr = 0;
 		}
 	}
+	return hr;
+}
+
+// Background removal function
+HRESULT Kinect::processDepth(){
+	HRESULT hr;
+	HRESULT bghr = S_OK;
+	NUI_IMAGE_FRAME imageFrame;
+
+	// Getting the depth frame
+	LARGE_INTEGER depthTimeStamp;
+	hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pDepthStreamHandle, 0, &imageFrame);
+	if (FAILED(hr)){
+		printf("FAILED getting the depth frame\n");
+		return hr;
+	}
+
+	depthTimeStamp = imageFrame.liTimeStamp;
+	INuiFrameTexture * texture;
+
+	// Getting the extended depth texture;
+	BOOL nearMode = true;
+	hr = m_pNuiSensor->NuiImageFrameGetDepthImagePixelFrameTexture(
+		m_pDepthStreamHandle, &imageFrame, &nearMode, &texture);
+	if (FAILED(hr)){
+		printf("FAILED getting the extended depth texture\n");
+		return hr;
+	}
+
+	NUI_LOCKED_RECT lockedRect;
+	
+	//Lock the frame data to read it and don't let the kinect modify it
+	texture->LockRect(0, &lockedRect, NULL, 0);
+
+	// Make sure it is valid data before presenting it to the background removed color stream
+	if (lockedRect.Pitch != 0){
+		// Processes data from the kinect depth frame
+		bghr = m_pBackgroundRemovalStream->ProcessDepth(
+			m_depthWidth * m_depthHeight * 4, lockedRect.pBits, depthTimeStamp);
+	}
+
+	// Unlocking textures
+	texture->UnlockRect(0);
+	texture->Release();
+
+	// Release the frame
+	hr = m_pNuiSensor->NuiImageStreamReleaseFrame(m_pDepthStreamHandle, &imageFrame);
+	if (FAILED(bghr)){
+		printf("FAILED processing the kinect depth frame\n");
+		return bghr;
+	}
+
 	return hr;
 }
 
@@ -276,9 +453,24 @@ HRESULT Kinect::process(unsigned char ** dest, u64 * time, int i)
 	HRESULT hr = true;
 	
 	printf("\tProcess\n");
-	processColor(dest, time);
-	hr = processSkeleton(i);
 
+	
+	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextBackgroundRemovedFrameEvent, INFINITE)){
+		ComposeImage(); // Background
+	}
+
+	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextDepthFrameEvent, INFINITE)){
+		processDepth(); // Background
+	}
+	
+	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextColorFrameEvent, INFINITE)){
+		processColor(dest, time);
+	}
+	
+	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextSkeletonEvent, INFINITE)){
+		hr = processSkeleton(i);
+	}
+	
 	return hr;
 }
 
@@ -439,17 +631,6 @@ void GetScreenshotFileName(wchar_t *screenshotName, UINT screenshotNameSize)
 	CoTaskMemFree(knownPath);
 	return;
 }
-
-/*
-void rgbaDataToYuv(unsigned char ** oldData, unsigned char ** newData){
-	for (int i = 0; i < 640 * 480 * 4; i += 4){
-		*newData[i] = (unsigned char)((0.299 * (*oldData[i]) + 0.587 * (*oldData[i+1]) + 0.114 * (*oldData[i+2])) * 219/255)+16;
-		*newData[i + 1] = (unsigned char)((-0.299 * *oldData[i] - 0.587 * *oldData[i+1] + 0.886 * *oldData[i+2]) * 224/1.772/255) + 128;
-		*newData[i + 2] = (unsigned char)((0.701 * *oldData[i] - 0.587 * *oldData[i+1] - 0.114 * *oldData[i+2]) * 224/1.402/255) + 128;
-	}
-	return;
-}
-*/
 
 // BACKGROUND Determine the player whom the background removed color stream should consider as foreground
 HRESULT Kinect::ChooseSkeleton(NUI_SKELETON_DATA* pSkeletonData){
