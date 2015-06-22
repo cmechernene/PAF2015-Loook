@@ -3,6 +3,8 @@
 #include <strsafe.h>
 #include <comdef.h>
 
+extern u64 sys_start;
+
 using namespace std;
 
 NUI_IMAGE_FRAME imageFrame;
@@ -11,18 +13,28 @@ std::ostringstream skelString;
 std::string temp;
 std::ofstream skelPlaylist;
 
-#define BACKGROUND
+//#define BACKGROUND
 
-Kinect::Kinect() : m_hNextColorFrameEvent(INVALID_HANDLE_VALUE), //sert a detecter un evenement camera video
-m_pColorStreamHandle(INVALID_HANDLE_VALUE),
-m_hNextSkeletonEvent(INVALID_HANDLE_VALUE), //sert a detecter un evenement squelette
-m_pSkeletonStreamHandle(INVALID_HANDLE_VALUE),
-m_pNuiSensor(NULL), //permet de choisir le capteur à utiliser (camera IR ou couleur)
-m_trackedSkeleton(NUI_SKELETON_INVALID_TRACKING_ID), //Background
-m_pBackgroundRemovalStream(NULL), //Background
-m_pDepthStreamHandle(INVALID_HANDLE_VALUE), // Background
-m_hNextDepthFrameEvent(INVALID_HANDLE_VALUE), // Background
-m_hNextBackgroundRemovedFrameEvent(INVALID_HANDLE_VALUE) // Background
+Kinect::Kinect() : 
+	m_hNextColorFrameEvent(INVALID_HANDLE_VALUE), //sert a detecter un evenement camera video
+	
+	m_pColorStreamHandle(INVALID_HANDLE_VALUE),
+	
+	m_hNextSkeletonEvent(INVALID_HANDLE_VALUE), //sert a detecter un evenement squelette
+	
+	m_pSkeletonStreamHandle(INVALID_HANDLE_VALUE),
+	
+	m_pNuiSensor(NULL), //permet de choisir le capteur à utiliser (camera IR ou couleur)
+	
+	m_trackedSkeleton(NUI_SKELETON_INVALID_TRACKING_ID), //Background
+	
+	m_pBackgroundRemovalStream(NULL), //Background
+	
+	m_pDepthStreamHandle(INVALID_HANDLE_VALUE), // Background
+	
+	m_hNextDepthFrameEvent(INVALID_HANDLE_VALUE), // Background
+	
+	m_hNextBackgroundRemovedFrameEvent(INVALID_HANDLE_VALUE) // Background
 
 {
 	m_depthWidth = 320;
@@ -90,11 +102,11 @@ HRESULT Kinect::update(unsigned char ** dest, u64 * time, int i)
 	HRESULT hr = true;
 	if (m_pNuiSensor == NULL)
 		return hr = E_FAIL;
-	printf("\n********************* update\n");
+	//printf("\n********************* update\n");
 
-		printf("debut process (kinect)\n");
+		//printf("debut process (kinect)\n");
 		hr = process(dest, time, i);
-		printf("sortie de process (kinect)\n");
+		//printf("sortie de process (kinect)\n");
 	return hr;
 }
 
@@ -234,7 +246,7 @@ HRESULT Kinect::ComposeImage(){
 	NUI_BACKGROUND_REMOVED_COLOR_FRAME removedFrame;
 
 	// Gets the next frame of data from the background removed color stream
-	hr = m_pBackgroundRemovalStream->GetNextFrame(5000, &removedFrame);
+	hr = m_pBackgroundRemovalStream->GetNextFrame(1000, &removedFrame);
 	if (FAILED(hr)){
 		printf("FAILED getting the next background removed color frame\n");
 		return hr;
@@ -278,7 +290,7 @@ HRESULT Kinect::ComposeImage(){
 
 HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 
-	printf("\t\tProcess Color\n");
+	//printf("\t\tProcess Color\n");
 	HRESULT hr;
 	HRESULT bghr S_OK;
 
@@ -290,7 +302,7 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 
 
 	// Attempt to get the color frame
-	hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pColorStreamHandle, 5000, &imageFrame);
+	hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pColorStreamHandle, 20, &imageFrame);
 	if (FAILED(hr))
 	{
 		static int nbFail = 0;
@@ -311,6 +323,16 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 
 	if (m_LockedRect.Pitch != 0)
 	{
+
+#ifdef BACKGROUND
+		bghr = m_pBackgroundRemovalStream->ProcessColor(cColorWidth*cColorHeight * 4, m_LockedRect.pBits, colorTimeStamp);		
+
+		if (FAILED(bghr)){
+			printf("FAILED processing color data\n");
+			return bghr;
+		}
+
+#endif
 		unsigned char * currFrame = (unsigned char *)m_LockedRect.pBits;
 		*time = gf_sys_clock_high_res();
 
@@ -321,15 +343,6 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 			(*dest)[i - j + 1] = currFrame[i + 1];
 			(*dest)[i - j + 2] = currFrame[i];
 			j++;
-		}
-
-#ifdef BACKGROUND
-		bghr = m_pBackgroundRemovalStream->ProcessColor(cColorWidth*cColorHeight * 4, m_LockedRect.pBits, colorTimeStamp);
-#endif		
-
-		if (FAILED(bghr)){
-			printf("FAILED processing color data\n");
-			return bghr;
 		}
 
 		// Conversion RGB -> YUV
@@ -373,7 +386,7 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 		return hr;
 	}
 
-	printf("\t\tColor OK\n");
+	//printf("\t\tColor OK\n");
 	return hr;
 }
 
@@ -381,10 +394,11 @@ HRESULT Kinect::processSkeleton(int k){
 	HRESULT hr;
 
 	NUI_SKELETON_FRAME skeletonFrame;
-	hr = m_pNuiSensor->NuiSkeletonGetNextFrame(3000, &skeletonFrame);
+	hr = m_pNuiSensor->NuiSkeletonGetNextFrame(30, &skeletonFrame);
+	u64 time = gf_sys_clock_high_res();
 	
 	if (FAILED(hr)){
-		printf("\t\t\tFAILED SKELETON\n");
+		//printf("\t\t\tFAILED SKELETON\n");
 		return hr;
 	}
 
@@ -421,8 +435,8 @@ HRESULT Kinect::processSkeleton(int k){
 		NUI_SKELETON_TRACKING_STATE trackingState = skeletonData[i].eTrackingState;
 		if (NUI_SKELETON_TRACKED == trackingState){
 			//Draw the tracked skeleton
-			printf("\t\t\t1 Skeleton tracked\n");
-			SaveSkeletonToFile(skeletonData[i], k);
+			//printf("\t\t\t1 Skeleton tracked\n");
+			SaveSkeletonToFile(skeletonData[i], k, time);
 			hr = 0;
 		}
 	}
@@ -438,7 +452,7 @@ HRESULT Kinect::processDepth(){
 
 	// Getting the depth frame
 	LARGE_INTEGER depthTimeStamp;
-	hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pDepthStreamHandle, 3000, &imageFrame);
+	hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pDepthStreamHandle, 30, &imageFrame);
 	if (FAILED(hr)){
 		printf("FAILED getting the depth frame\n");
 		return hr;
@@ -497,29 +511,31 @@ HRESULT Kinect::process(unsigned char ** dest, u64 * time, int i)
 	{
 		return E_FAIL;;
 	}
+
 	
-	printf("\tProcess\n");
+	//printf("\tProcess\n");
 
-	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextColorFrameEvent, INFINITE)){
+
+	//if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextColorFrameEvent, 0)){
 		processColor(dest, time);
-	}
-
-	printf("\t\tWait skeleton\n");
-	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextSkeletonEvent, INFINITE)){
-		hr = processSkeleton(i);
-	}
-
-#ifdef BACKGROUND
-	printf("\t\tWait depth\n");
-	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextDepthFrameEvent, INFINITE)){
-		processDepth(); // Background
-	}
-
-	//printf("\t\tWait Background\n");
-	//if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextBackgroundRemovedFrameEvent, 2000)){
-		ComposeImage(); // Background
 	//}
 
+	//printf("\t\tWait skeleton\n");
+	//if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextSkeletonEvent, 0)){
+		hr = processSkeleton(i);
+	//}
+
+#ifdef BACKGROUND
+
+	//printf("\t\tWait depth\n");
+	//if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextDepthFrameEvent, 0)){
+		processDepth(); // Background
+	//}
+
+	//printf("\t\tWait Background\n");
+	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextBackgroundRemovedFrameEvent, 500)){
+		ComposeImage(); // Background
+	}
 
 #endif	
 	
@@ -541,7 +557,7 @@ void Kinect:: skelCoordToColorCoord(Vector4 skelCoords, LONG ** dest){
 	return;
 }
 
-void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j)
+void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j, u64 time)
 {
 
 	FLOAT depthX =0;
@@ -552,7 +568,7 @@ void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j)
 	std::string dest = "";
 	std::ostringstream destination;
 
-	printf("\t\t\tSave Skeleton\n");
+	//printf("\t\t\tSave Skeleton\n");
 	std::string boneNames[20];
 	std::ostringstream tmp;
 	std::ostringstream coordString;
@@ -603,7 +619,7 @@ void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j)
 	myfile.open(dest);
 	if (myfile.is_open()){
 		myfile << resultStream.str();
-		printf("\t\t\twrote coordinates %d\n", j);
+		//printf("\t\t\twrote coordinates %d\n", j);
 		myfile.close();
 	}
 	else{
@@ -614,7 +630,7 @@ void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j)
 	// Writes skeleton playlist
 	temp = skelString.str();
 	skelString.str("");
-	skelString << "Coordinates_" << j <<".json\n";
+	skelString << "Started at : " << time << " ; Coordinates_" << j << ".json\n";
 	skelString << temp;
 	skelPlaylist.open("output\\skelPlaylist.txt");
 	if (skelPlaylist.is_open()){

@@ -4,6 +4,8 @@
 #include <sstream>
 #include <windows.h>
 
+u64 sys_start;
+
 int main()
 {
 	int i, nb_test_frames;
@@ -17,8 +19,9 @@ int main()
 	int seg_dur_in_ms = 1000;
 	int seg_num = 1;
 	u32 data_size = width * height * 3;
-	u64 sys_start;
+
 	u64 now;
+	u64 timeref;
 
 	std::ostringstream destStream;
 	std::string destName;
@@ -55,7 +58,7 @@ int main()
 		return 1;
 	}
 	//try to generate 4 seconds (eg 4 segments)
-	nb_test_frames = 30 * 3;
+	nb_test_frames = 30 * 4;
 
 	sys_start = gf_sys_clock_high_res();
 
@@ -74,6 +77,8 @@ int main()
 			//need to start the segment (this will generate the init segment on the first pass)
 			if (!muxer->segment_started) {
 				muxer_open_segment(muxer, "output", "seg", seg_num);
+				timeref = gf_sys_clock_high_res() - sys_start;
+				//printf("\t\t\t\tOpening segment time : %llu\n", timeref);
 			}
 
 			res = muxer_write_frame(muxer, i);
@@ -88,7 +93,7 @@ int main()
 				// Writing playlists
 				tmp = imListStream.str();
 				imListStream.str("");
-				imListStream << "im_" << seg_num << ".png\n";
+				imListStream << "Started at : " << timeref << " ; im_" << seg_num << ".png\n";
 				imListStream << tmp;
 				imPlaylist.open("output\\imPlaylist.txt");
 				imPlaylist << imListStream.str();
@@ -96,7 +101,7 @@ int main()
 
 				tmp = vidListStream.str();
 				vidListStream.seekp(0);
-				vidListStream << "seg_" << seg_num << "_gpac.m4s\n";
+				vidListStream << "Started at : " << timeref << " ; seg_" << seg_num << "_gpac.m4s\n";
 				vidListStream << tmp;
 				vidPlaylist.open("output\\playlist.txt");
 				vidPlaylist << vidListStream.str();
