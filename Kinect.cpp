@@ -7,6 +7,12 @@ using namespace std;
 
 NUI_IMAGE_FRAME imageFrame;
 
+std::ostringstream skelString;
+std::string temp;
+std::ofstream skelPlaylist;
+
+//#define BACKGROUND
+
 Kinect::Kinect() : m_hNextColorFrameEvent(INVALID_HANDLE_VALUE), //sert a detecter un evenement camera video
 m_pColorStreamHandle(INVALID_HANDLE_VALUE),
 m_hNextSkeletonEvent(INVALID_HANDLE_VALUE), //sert a detecter un evenement squelette
@@ -19,19 +25,19 @@ m_hNextDepthFrameEvent(INVALID_HANDLE_VALUE), // Background
 m_hNextBackgroundRemovedFrameEvent(INVALID_HANDLE_VALUE) // Background
 
 {
-
 	printf("Creating events [CreateFirstConnected]\n");
+
+	// Background. Event that will be signaled when depth data is available
+	m_hNextDepthFrameEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+
 	// Create an event that will be signaled when color data is available
 	m_hNextColorFrameEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 
 	//From Skeleton basics. Create an event that'll be signaled when skeleton data is available
 	m_hNextSkeletonEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-
-	// Background. Event that will be signaled when depth data is available
-	//m_hNextDepthFrameEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-
+	
 	// Background : Event that will be signaled when the segmentation frame is ready
-	//m_hNextBackgroundRemovedFrameEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	m_hNextBackgroundRemovedFrameEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 
 	// create heap storage for depth pixel data in RGBX format
 	m_outputRGBX = new BYTE[640 * 480 * 4];
@@ -46,7 +52,10 @@ m_hNextBackgroundRemovedFrameEvent(INVALID_HANDLE_VALUE) // Background
 	}
 
 	createFirstConnected();
-	//createBackgroundRemovedColorStream(); // Background removal
+
+#ifdef BACKGROUND
+	createBackgroundRemovedColorStream(); // Background removal
+#endif
 }
 
 
@@ -80,7 +89,7 @@ HRESULT Kinect::update(unsigned char ** dest, u64 * time, int i)
 	printf("\n********************* update\n");
 
 		printf("debut process (kinect)\n");
-		hr = process(dest, time, i);//permet de mettre à jour le process (detection de la video en couleur et squelette)
+		hr = process(dest, time, i);
 		printf("sortie de process (kinect)\n");
 	return hr;
 }
@@ -122,21 +131,23 @@ HRESULT Kinect::createFirstConnected()
 	if (m_pNuiSensor != NULL)
 	{
 		printf("Sensor found [CreateFirstConnected]\n");
+
 		// Initialize the Kinect and specify that we'll be using color AND SKELETON
 
-
 		// NO BACKGROUND
-		//hr = m_pNuiSensor->NuiInitialize(NUI_INITIALIZE_FLAG_USES_COLOR | NUI_INITIALIZE_FLAG_USES_SKELETON); //Added NUI_INITIALIZE_FLAG_USES_SKELETON
+#ifndef BACKGROUND
+		hr = m_pNuiSensor->NuiInitialize(NUI_INITIALIZE_FLAG_USES_COLOR | NUI_INITIALIZE_FLAG_USES_SKELETON); //Added NUI_INITIALIZE_FLAG_USES_SKELETON
+#endif
 
 		//WITH BACKGROUND
-		hr = m_pNuiSensor->NuiInitialize(NUI_INITIALIZE_FLAG_USES_COLOR | NUI_INITIALIZE_FLAG_USES_SKELETON); //DEPTH_AND_PLAYER_INDEX
-
+		//hr = m_pNuiSensor->NuiInitialize(NUI_INITIALIZE_FLAG_USES_COLOR | NUI_INITIALIZE_FLAG_USES_SKELETON | NUI_INITIALIZE_FLAG_USES_DEPTH_AND_PLAYER_INDEX);
+#ifdef BACKGROUND		
+		hr = m_pNuiSensor->NuiInitialize(NUI_INITIALIZE_FLAG_USES_DEPTH_AND_PLAYER_INDEX | NUI_INITIALIZE_FLAG_USES_COLOR | NUI_INITIALIZE_FLAG_USES_SKELETON);
+#endif
 
 		if (SUCCEEDED(hr))
-		{
-
-			/*
-			#ifndef BACKGROUND
+		{			
+#ifndef BACKGROUND
 			// Open a color image stream to receive color frames
 			hr = m_pNuiSensor->NuiImageStreamOpen(
 			NUI_IMAGE_TYPE_COLOR, // signifie qu'on utilise le RGB. Autres possibilités: https://msdn.microsoft.com/en-us/library/nuiimagecamera.nui_image_type.aspx
@@ -148,18 +159,17 @@ HRESULT Kinect::createFirstConnected()
 
 			// Open a skeleton stream to receive skeleton data
 			hr = m_pNuiSensor->NuiSkeletonTrackingEnable(m_hNextSkeletonEvent, 0);
-			#endif
-			*/
-			//#ifdef BACKGROUND
-			//Open depth image stream
+#endif
 			
-			/*hr = m_pNuiSensor->NuiImageStreamOpen(NUI_IMAGE_TYPE_DEPTH_AND_PLAYER_INDEX,
+#ifdef BACKGROUND
+			//Open depth image stream
+			hr = m_pNuiSensor->NuiImageStreamOpen(NUI_IMAGE_TYPE_DEPTH_AND_PLAYER_INDEX,
 				NUI_IMAGE_RESOLUTION_320x240,
 				0,
 				2,
 				m_hNextDepthFrameEvent,
 				&m_pDepthStreamHandle);
-*/
+
 			if (SUCCEEDED(hr)){
 				//Open a color image stream
 				printf("Opening a color image stream\n");
@@ -177,7 +187,7 @@ HRESULT Kinect::createFirstConnected()
 				}
 			}
 
-			//#endif
+#endif
 
 		}
 	}
@@ -206,6 +216,7 @@ HRESULT Kinect::createBackgroundRemovedColorStream(){
 	}
 
 	hr = m_pBackgroundRemovalStream->Enable(NUI_IMAGE_RESOLUTION_640x480, NUI_IMAGE_RESOLUTION_320x240, m_hNextBackgroundRemovedFrameEvent);
+	printf("Background REMOVAL ENABLED\n");
 	return hr;
 }
 
@@ -215,7 +226,7 @@ HRESULT Kinect::ComposeImage(){
 	NUI_BACKGROUND_REMOVED_COLOR_FRAME removedFrame;
 
 	// Gets the next frame of data from the background removed color stream
-	hr = m_pBackgroundRemovalStream->GetNextFrame(0, &removedFrame);
+	hr = m_pBackgroundRemovalStream->GetNextFrame(100, &removedFrame);
 	if (FAILED(hr)){
 		printf("FAILED getting the next background removed color frame\n");
 		return hr;
@@ -261,7 +272,8 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 
 	printf("\t\tProcess Color\n");
 	HRESULT hr;
-	HRESULT bghr;
+	HRESULT bghr S_OK;
+
 	// Glob var to skeleton conversion to rgb coordinates
 	//NUI_IMAGE_FRAME imageFrame;
 
@@ -306,13 +318,15 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 			j++;
 		}
 
+#ifdef BACKGROUND
+		bghr = m_pBackgroundRemovalStream->ProcessColor(cColorHeight*cColorHeight * 4, m_LockedRect.pBits, colorTimeStamp);
+#endif		
 
-//		bghr = m_pBackgroundRemovalStream->ProcessColor(cColorHeight*cColorHeight * 4, m_LockedRect.pBits, colorTimeStamp);
-/*		if (FAILED(bghr)){
+		if (FAILED(bghr)){
 			printf("FAILED processing color data\n");
 			return bghr;
 		}
-*/
+
 		// Conversion RGB -> YUV
 		//unsigned char * yuvData = (unsigned char *)malloc(cColorWidth * cColorHeight * 3);
 		//rgbaDataToYuv(&curr, &yuvData);
@@ -357,6 +371,7 @@ HRESULT Kinect::processSkeleton(int k){
 
 	NUI_SKELETON_FRAME skeletonFrame;
 	hr = m_pNuiSensor->NuiSkeletonGetNextFrame(30, &skeletonFrame);
+	
 	if (FAILED(hr)){
 		printf("\t\t\tFAILED SKELETON\n");
 		return hr;
@@ -369,15 +384,20 @@ HRESULT Kinect::processSkeleton(int k){
 	NUI_SKELETON_DATA * skeletonData = skeletonFrame.SkeletonData;
 
 	//Choose the skeleton that we need to remove the background. May replace the for loop?
-/*	hr = ChooseSkeleton(skeletonData);
+#ifdef BACKGROUND
+	hr = ChooseSkeleton(skeletonData);
+#endif
+
 	if (FAILED(hr)){
 		printf("FAILED To choose skeleton\n");
 		return hr;
-	}*/
+	}
 
 	// Background removal processing
-	//hr = m_pBackgroundRemovalStream->ProcessSkeleton(NUI_SKELETON_COUNT, skeletonData, skeletonFrame.liTimeStamp);
 
+#ifdef BACKGROUND
+	hr = m_pBackgroundRemovalStream->ProcessSkeleton(NUI_SKELETON_COUNT, skeletonData, skeletonFrame.liTimeStamp);
+#endif
 
 	// Saving skel coordinates
 	for (int i = 0; i < NUI_SKELETON_COUNT; i++){
@@ -412,7 +432,8 @@ HRESULT Kinect::processDepth(){
 	INuiFrameTexture * texture;
 
 	// Getting the extended depth texture;
-	BOOL nearMode = true;
+
+	BOOL nearMode = false;
 	hr = m_pNuiSensor->NuiImageFrameGetDepthImagePixelFrameTexture(
 		m_pDepthStreamHandle, &imageFrame, &nearMode, &texture);
 	if (FAILED(hr)){
@@ -450,10 +471,15 @@ HRESULT Kinect::processDepth(){
 HRESULT Kinect::process(unsigned char ** dest, u64 * time, int i)
 {
 	HRESULT hr = true;
+
+	if (NULL == m_pNuiSensor)
+	{
+		return E_FAIL;;
+	}
 	
 	printf("\tProcess\n");
 
-	/*
+#ifdef BACKGROUND
 	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextBackgroundRemovedFrameEvent, INFINITE)){
 		ComposeImage(); // Background
 	}
@@ -461,7 +487,8 @@ HRESULT Kinect::process(unsigned char ** dest, u64 * time, int i)
 	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextDepthFrameEvent, INFINITE)){
 		processDepth(); // Background
 	}
-	*/
+#endif	
+
 	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextColorFrameEvent, INFINITE)){
 		processColor(dest, time);
 	}
@@ -557,6 +584,20 @@ void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j)
 		printf("\nERROR OPENING FILE\n");
 	}
 	free(res);
+
+	// Writes skeleton playlist
+	temp = skelString.str();
+	skelString.str("");
+	skelString << "Coordinates_" << j <<".json\n";
+	skelString << temp;
+	skelPlaylist.open("output\\skelPlaylist.txt");
+	if (skelPlaylist.is_open()){
+		skelPlaylist << skelString.str();
+	}
+	else{
+		printf("\n\n\nERROR OPENING SKELPLAYLIST\n");
+	}
+	skelPlaylist.close();
 }
 
 
@@ -665,6 +706,7 @@ HRESULT Kinect::ChooseSkeleton(NUI_SKELETON_DATA* pSkeletonData){
 		hr = m_pBackgroundRemovalStream->SetTrackedPlayer(closestSkeleton);
 		if (FAILED(hr))
 		{
+			printf("FAILED CHOOSING SKELETON\n");
 			return hr;
 		}
 

@@ -22,6 +22,15 @@ int main()
 
 	std::ostringstream destStream;
 	std::string destName;
+
+	std::ostringstream vidListStream;
+	std::ofstream vidPlaylist;
+	std::string tmp;
+
+	std::ostringstream imListStream;
+	std::ofstream imPlaylist;
+
+	vidListStream << "seg_init_gpac.mp4\n";
 	
 	u8 *data = (u8 *)malloc(data_size);
 
@@ -46,7 +55,7 @@ int main()
 		return 1;
 	}
 	//try to generate 4 seconds (eg 4 segments)
-	nb_test_frames = 30 * 4;
+	nb_test_frames = 30 * 3;
 
 	sys_start = gf_sys_clock_high_res();
 
@@ -75,6 +84,24 @@ int main()
 				destStream << "C:\\Users\\Martin\\ColorBasics-D2D\\output\\screen\\im_" << seg_num << ".png";
 				destName = destStream.str();
 				ScreenCapture(0, 0, 1920, 1080, (char *)destName.c_str());
+
+				// Writing playlists
+				tmp = imListStream.str();
+				imListStream.str("");
+				imListStream << "im_" << seg_num << ".png\n";
+				imListStream << tmp;
+				imPlaylist.open("output\\imPlaylist.txt");
+				imPlaylist << imListStream.str();
+				imPlaylist.close();
+
+				tmp = vidListStream.str();
+				vidListStream.seekp(0);
+				vidListStream << "seg_" << seg_num << "_gpac.m4s\n";
+				vidListStream << tmp;
+				vidPlaylist.open("output\\playlist.txt");
+				vidPlaylist << vidListStream.str();
+				vidPlaylist.close();
+
 				seg_num++;
 			}
 		}
