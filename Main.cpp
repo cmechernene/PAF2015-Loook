@@ -22,6 +22,8 @@ int main()
 
 	u64 now;
 	u64 timeref;
+	u64 timeScreenshot =0.0;
+	u64 lastScreenshot = 0.0;
 
 	std::ostringstream destStream;
 	std::string destName;
@@ -31,9 +33,15 @@ int main()
 	std::string tmp;
 
 	std::ostringstream imListStream;
-	std::ofstream imPlaylist;
+	int im_num = 0;
+	int im_refJSON = 1;
+
+	std::ostringstream skelListStream;
 
 	vidListStream << "seg_init_gpac.mp4\n";
+
+	BOOL resKinect;
+	INPUT newSlideInput;
 	
 	u8 *data = (u8 *)malloc(data_size);
 
@@ -46,7 +54,7 @@ int main()
 	unsigned char * kinectFrame = (unsigned char *)malloc(data_size);
 
 	gf_sys_init(GF_FALSE);
-	//Sleep(500);
+	//Sleep(3000);
 
 	// Init DASHOutputFile : frame_per_segment, frame_dur, alloc avframe, alloc buffer, codec context, ...
 	// OLD muxer = muxer_init(seg_dur_in_ms, 33333, 1000000, 30, width, height, bitrate, GF_TRUE);
@@ -66,7 +74,50 @@ int main()
 		u64 pts;
 
 		// Update kinectFrameData 
-		HRESULT hr = kinect.update(&kinectFrame, &now, i);
+		BOOL resKinect = kinect.update(&kinectFrame, &now, i);
+
+		// If gesture is detected, switching slides, preparing image playlist
+		if (resKinect){
+			printf("Changed Slide\n");
+			newSlideInput.type = INPUT_KEYBOARD;
+			newSlideInput.ki.wScan = 0;
+			newSlideInput.ki.time = 0;
+			newSlideInput.ki.dwExtraInfo = 0;
+
+			// PRESS right key
+			newSlideInput.ki.wVk = 0x41;//VK_RIGHT; // right arrow key
+			newSlideInput.ki.dwFlags = 0; // key press
+			SendInput(1, &newSlideInput, sizeof(INPUT));
+
+			// RELEASE right key
+			newSlideInput.ki.dwFlags = KEYEVENTF_KEYUP;
+			SendInput(1, &newSlideInput, sizeof(INPUT));
+
+			// Make sure we really switched slides before capturing screen
+			Sleep(100);
+			destStream.str("");
+			destStream << "C:\\Users\\Martin\\ColorBasics-D2D\\output\\screen\\im_" << im_num << ".png";
+			destName = destStream.str();
+			ScreenCapture(0, 0, 1920, 1080, (char *)destName.c_str());
+			lastScreenshot = timeScreenshot;
+			timeScreenshot = gf_sys_clock_high_res() - sys_start;
+			im_num++;
+			
+			if (im_refJSON == 1){
+				imListStream << " \"" << im_refJSON << "\":" << "im_" << im_num << ".png\", \"Time_after_segment\": \"" << timeScreenshot - lastScreenshot << "\"";
+			}
+			else{
+				imListStream << ", \"" << im_refJSON << "\":" << "im_" << im_num << ".png\", \"Time_after_segment\": \"" << timeScreenshot - lastScreenshot << "\"";
+			}
+			im_refJSON++;
+		}
+
+		if ((i % 30 + 1) == 30){
+			skelListStream << "\"" << i % 30 + 1 << "\": \"Coordinates_" << i << ".json\"\n\t\t\t\t";
+		}
+		else{
+			skelListStream << "\"" << i % 30 + 1 << "\": \"Coordinates_" << i << ".json\",\n\t\t\t\t";
+		}
 		pts = gf_sys_clock_high_res() - sys_start;
 
 		// OLD int res = muxer_encode(muxer, kinectFrame, data_size, pts);
@@ -85,28 +136,32 @@ int main()
 			//function returns 1 if segment should be closed (duration exceeded) done with segment, close it
 			if (res == 1) {
 				muxer_close_segment(muxer);
-				destStream.str("");
-				destStream << "C:\\Users\\Martin\\ColorBasics-D2D\\output\\screen\\im_" << seg_num << ".png";
-				destName = destStream.str();
-				ScreenCapture(0, 0, 1920, 1080, (char *)destName.c_str());
 
-				// Writing playlists
-				tmp = imListStream.str();
-				imListStream.str("");
-				imListStream << "Started at : " << timeref << " ; im_" << seg_num << ".png\n";
-				imListStream << tmp;
-				imPlaylist.open("output\\imPlaylist.txt");
-				imPlaylist << imListStream.str();
-				imPlaylist.close();
-
+				// Write playlist
 				tmp = vidListStream.str();
 				vidListStream.seekp(0);
-				vidListStream << "Started at : " << timeref << " ; seg_" << seg_num << "_gpac.m4s\n";
+				vidListStream << "\n\t[\n\t\t{ \n\t\t\"Open_segment_time\":" << "\"" << timeref << "\",";
+				vidListStream << "\n\t\t\"Video_Segment\": seg_" << seg_num << "_gpac.m4s,\n\t\t\"Skel_Segments\":";
+				vidListStream << "[{" << skelListStream.str() << "}],\n\t\t";
+				vidListStream << "\"Slides\": [{" << imListStream.str() << "}]\n";
+				vidListStream << "\t\t}\n\t]\n";
+
 				vidListStream << tmp;
 				vidPlaylist.open("output\\playlist.txt");
 				vidPlaylist << vidListStream.str();
 				vidPlaylist.close();
 
+				imListStream.str("");
+				skelListStream.str("");
+
+				// if we made a screenshot during the previous segment, report it in the next segment
+				if (im_refJSON > 1){
+					im_refJSON = 1;
+					imListStream << "\"" << im_refJSON << "\":" << "im_" << im_num << ".png\", \"Time_after_segment\": \"" << 0.0 << "\"";
+					lastScreenshot = timeScreenshot;
+					timeScreenshot = gf_sys_clock_high_res() - sys_start;
+					im_refJSON++;
+				}
 				seg_num++;
 			}
 		}

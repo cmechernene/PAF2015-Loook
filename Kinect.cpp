@@ -13,6 +13,13 @@ std::ostringstream skelString;
 std::string temp;
 std::ofstream skelPlaylist;
 
+FLOAT x1R, y1R, z1R, x2R, y2R, z2R, x1L, y1L, z1L, x2L, y2L, z2L;
+FLOAT dotR[3];
+FLOAT dotL[3];
+FLOAT distElbow = 0;
+
+LPDWORD info;
+
 //#define BACKGROUND
 
 Kinect::Kinect() : 
@@ -39,6 +46,8 @@ Kinect::Kinect() :
 {
 	m_depthWidth = 320;
 	m_depthHeight = 240;
+
+	recentlyChanged = 1000000;
 
 	printf("Creating events [CreateFirstConnected]\n");
 
@@ -97,17 +106,17 @@ Kinect::~Kinect()
 	m_pBackgroundRemovalStream = NULL;
 }
 
-HRESULT Kinect::update(unsigned char ** dest, u64 * time, int i)
+BOOL Kinect::update(unsigned char ** dest, u64 * time, int i)
 {
-	HRESULT hr = true;
+	BOOL b = false;
 	if (m_pNuiSensor == NULL)
-		return hr = E_FAIL;
+		return b = false;
 	//printf("\n********************* update\n");
 
 		//printf("debut process (kinect)\n");
-		hr = process(dest, time, i);
+		b = process(dest, time, i);
 		//printf("sortie de process (kinect)\n");
-	return hr;
+	return b;
 }
 
 HRESULT Kinect::createFirstConnected()
@@ -232,6 +241,9 @@ HRESULT Kinect::createBackgroundRemovedColorStream(){
 	}
 
 	hr = m_pBackgroundRemovalStream->Enable(NUI_IMAGE_RESOLUTION_640x480, NUI_IMAGE_RESOLUTION_320x240, m_hNextBackgroundRemovedFrameEvent);
+
+	GetHandleInformation(m_pBackgroundRemovalStream, info);
+
 	if (FAILED(hr)){
 		printf("\t\t*** FAILED TO ENABLE BACKGROUND ***\n");
 		return hr;
@@ -247,6 +259,9 @@ HRESULT Kinect::ComposeImage(){
 
 	// Gets the next frame of data from the background removed color stream
 	hr = m_pBackgroundRemovalStream->GetNextFrame(1000, &removedFrame);
+
+	GetHandleInformation(m_pBackgroundRemovalStream, info);
+
 	if (FAILED(hr)){
 		printf("FAILED getting the next background removed color frame\n");
 		return hr;
@@ -280,6 +295,9 @@ HRESULT Kinect::ComposeImage(){
 	printf("Fin BMP\n");
 
 	hr = m_pBackgroundRemovalStream->ReleaseFrame(&removedFrame);
+
+	GetHandleInformation(m_pBackgroundRemovalStream, info);
+
 	if (FAILED(hr)){
 		return hr;
 	}
@@ -326,6 +344,8 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 
 #ifdef BACKGROUND
 		bghr = m_pBackgroundRemovalStream->ProcessColor(cColorWidth*cColorHeight * 4, m_LockedRect.pBits, colorTimeStamp);		
+
+		GetHandleInformation(m_pBackgroundRemovalStream, info);
 
 		if (FAILED(bghr)){
 			printf("FAILED processing color data\n");
@@ -390,8 +410,11 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 	return hr;
 }
 
-HRESULT Kinect::processSkeleton(int k){
+BOOL Kinect::processSkeleton(int k){
 	HRESULT hr;
+	BOOL savedSkelCoord = false;
+	ofstream file;
+	ostringstream destFile;
 
 	NUI_SKELETON_FRAME skeletonFrame;
 	hr = m_pNuiSensor->NuiSkeletonGetNextFrame(30, &skeletonFrame);
@@ -399,11 +422,15 @@ HRESULT Kinect::processSkeleton(int k){
 	
 	if (FAILED(hr)){
 		//printf("\t\t\tFAILED SKELETON\n");
-		return hr;
+		destFile.str("");
+		destFile << "output\\skelcoord\\Coordinates_" << k << ".json";
+		file.open(destFile.str());
+		file.close();
+		return false;
 	}
 
 	// Smooth the skeleton data ?
-	//m_pNuiSensor->NuiTransformSmooth(&skeletonFrame, NULL);
+	m_pNuiSensor->NuiTransformSmooth(&skeletonFrame, NULL);
 
 	// Holds skeleton data
 	NUI_SKELETON_DATA * skeletonData = skeletonFrame.SkeletonData;
@@ -421,6 +448,8 @@ HRESULT Kinect::processSkeleton(int k){
 	// Background removal processing
 #ifdef BACKGROUND
 	hr = m_pBackgroundRemovalStream->ProcessSkeleton(NUI_SKELETON_COUNT, skeletonData, skeletonFrame.liTimeStamp);
+
+	GetHandleInformation(m_pBackgroundRemovalStream, info);
 	
 	if (FAILED(hr)){
 		printf("\t\tFailed to Process skeleton BACKGROUND\n");
@@ -434,14 +463,93 @@ HRESULT Kinect::processSkeleton(int k){
 		// Tests which skeleton is tracked -> sometimes we may not enter in the if block
 		NUI_SKELETON_TRACKING_STATE trackingState = skeletonData[i].eTrackingState;
 		if (NUI_SKELETON_TRACKED == trackingState){
+			savedSkelCoord = true;
 			//Draw the tracked skeleton
-			//printf("\t\t\t1 Skeleton tracked\n");
+			//printf("\t\t\t1 Skeleton tracked\n");	
 			SaveSkeletonToFile(skeletonData[i], k, time);
 			hr = 0;
+
+			// Gesture recognition
+			x1R = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].x - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_RIGHT].x;
+			y1R = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].y - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_RIGHT].y;
+			z1R = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].z - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_RIGHT].z;
+
+			x1L = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].x - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_LEFT].x;
+			y1L = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].y - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_LEFT].y;
+			z1L = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].z - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_LEFT].z;
+
+			x2R = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_RIGHT].x - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].x;
+			y2R = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_RIGHT].y - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].y;
+			z2R = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_RIGHT].z - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].z;
+
+			x2L = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_LEFT].x - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].x;
+			y2L = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_LEFT].y - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].y;
+			z2L = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_LEFT].z - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].z;
+
+			
+			dotR[0] = y1R*z2R - z1R*y2R;
+			dotR[1] = z1R*x2R - x1R*z2R;
+			dotR[2] = x1R*y2R - y1R*x2R;
+
+			dotR[0] = y1L*z2L - z1L*y2L;
+			dotR[1] = z1L*x2L - x1L*z2L;
+			dotR[2] = x1L*y2L - y1L*x2L;
+
+			//printf("Produit DROIT : %f, %f, %f\n\n", dotR[0], dotR[1], dotR[2]);
+			/*if ((-0.0258 < dotR[0]) && (dotR[0] < 0.0258) && (-0.0258 < dotR[1]) && (dotR[1] < 0.0258) && (-0.0258 < dotR[2]) && (dotR[2] < 0.0258)){
+				printf("\tProduit NUL\n\n");
+
+				if ((-0.0258 < dotR[0]) && (dotR[0] < 0.0258) && (-0.0258 < dotR[1]) && (dotR[1] < 0.0258) && (-0.0258 < dotR[2]) && (dotR[2] < 0.0258)){
+
+				}
+			}
+			else{
+				printf("\n=/= 0\n");
+			}
+			*/
+
+			Vector4 leftElbow = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT];
+			Vector4 rightElbow = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT];
+			
+			FLOAT distElbow = sqrt((leftElbow.x - rightElbow.x)*(leftElbow.x - rightElbow.x)
+				+ (leftElbow.y - rightElbow.y)*(leftElbow.y - rightElbow.y)
+				+ (leftElbow.z - rightElbow.z)*(leftElbow.z - rightElbow.z));
+
+			/* MOVEMENT 1 ref
+			if ((skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_RIGHT].x > skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].x)
+				&& (skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_RIGHT].y > skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].y)
+				&& (skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_LEFT].x < skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].x)
+				&& (skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_LEFT].y > skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].y)){
+			*/	
+
+			/* MOVEMENT 2 ref */
+			printf("DIST %f\n", distElbow);
+			if ((distElbow < 0.12)
+				&& (skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_RIGHT].y > skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].y)
+				&& (skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_LEFT].y > skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].y)
+				){
+				
+				printf("SINCE LAST CHANGE : %llu\n", gf_sys_clock_high_res() - recentlyChanged);
+				if ((gf_sys_clock_high_res() - recentlyChanged) > 300000){
+					printf("\tCHANGE SLIDE\n");
+					recentlyChanged = gf_sys_clock_high_res();
+					return true;
+				}
+			}
+			else{
+				printf("STAY\n");
+			}
 		}
 	}
 
-	return hr;
+	if (!savedSkelCoord){
+		destFile.str("");
+		destFile << "output\\skelcoord\\Coordinates_" << k << ".json";
+		file.open(destFile.str());
+		file.close();
+	}
+
+	return false;
 }
 
 // Background removal function
@@ -483,6 +591,8 @@ HRESULT Kinect::processDepth(){
 			m_depthWidth * m_depthHeight * 4, lockedRect.pBits, depthTimeStamp);
 	}
 
+	GetHandleInformation(m_pBackgroundRemovalStream, info);
+
 	// Unlocking textures
 	texture->UnlockRect(0);
 	texture->Release();
@@ -503,9 +613,9 @@ HRESULT Kinect::processDepth(){
 }
 
 
-HRESULT Kinect::process(unsigned char ** dest, u64 * time, int i)
+BOOL Kinect::process(unsigned char ** dest, u64 * time, int i)
 {
-	HRESULT hr = true;
+	BOOL b = true;
 
 	if (NULL == m_pNuiSensor)
 	{
@@ -522,7 +632,7 @@ HRESULT Kinect::process(unsigned char ** dest, u64 * time, int i)
 
 	//printf("\t\tWait skeleton\n");
 	//if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextSkeletonEvent, 0)){
-		hr = processSkeleton(i);
+		b = processSkeleton(i);
 	//}
 
 #ifdef BACKGROUND
@@ -532,14 +642,14 @@ HRESULT Kinect::process(unsigned char ** dest, u64 * time, int i)
 		processDepth(); // Background
 	//}
 
-	//printf("\t\tWait Background\n");
+	printf("\t\tWait Background\n");
 	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextBackgroundRemovedFrameEvent, 500)){
 		ComposeImage(); // Background
 	}
 
 #endif	
 	
-	return hr;
+	return b;
 }
 
 void Kinect:: skelCoordToColorCoord(Vector4 skelCoords, LONG ** dest){
@@ -626,20 +736,6 @@ void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j, u64 time)
 		printf("\nERROR OPENING FILE\n");
 	}
 	free(res);
-
-	// Writes skeleton playlist
-	temp = skelString.str();
-	skelString.str("");
-	skelString << "Started at : " << time << " ; Coordinates_" << j << ".json\n";
-	skelString << temp;
-	skelPlaylist.open("output\\skelPlaylist.txt");
-	if (skelPlaylist.is_open()){
-		skelPlaylist << skelString.str();
-	}
-	else{
-		printf("\n\n\nERROR OPENING SKELPLAYLIST\n");
-	}
-	skelPlaylist.close();
 }
 
 
@@ -746,6 +842,9 @@ HRESULT Kinect::ChooseSkeleton(NUI_SKELETON_DATA* pSkeletonData){
 	if (!isTrackedSkeletonVisible && closestSkeleton != NUI_SKELETON_INVALID_TRACKING_ID)
 	{
 		hr = m_pBackgroundRemovalStream->SetTrackedPlayer(closestSkeleton);
+
+		GetHandleInformation(m_pBackgroundRemovalStream, info);
+
 		if (FAILED(hr))
 		{
 			printf("FAILED CHOOSING SKELETON\n");

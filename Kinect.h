@@ -23,7 +23,7 @@ public:
 	/// <summary>
 	/// Main processing function
 	/// </summary>
-	HRESULT                   update(unsigned char ** des, u64 * time, int i);
+	BOOL                   update(unsigned char ** des, u64 * time, int i);
 
 	/// <summary>
 	/// Create the first connected Kinect found 
@@ -34,9 +34,9 @@ public:
 	/// <summary>
 	/// Handle new color and skeleton data
 	/// </summary>
-	HRESULT                 process(unsigned char ** dest, u64 * time, int i);
+	BOOL				    process(unsigned char ** dest, u64 * time, int i);
 	HRESULT					processColor(unsigned char ** dest, u64 * time);
-	HRESULT					processSkeleton(int i);
+	BOOL					processSkeleton(int i);
 
 	void skelCoordToColorCoord(Vector4 skelCoords, LONG ** dest);
 	void SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int i, u64 t);
@@ -73,8 +73,10 @@ private:
 	HANDLE					m_hNextDepthFrameEvent;
 	HANDLE					m_hNextBackgroundRemovedFrameEvent;
 
-	BYTE*                              m_backgroundRGBX;
-	BYTE*                              m_outputRGBX;
+	BYTE*				    m_backgroundRGBX;
+	BYTE*                   m_outputRGBX;
+		
+	u64						recentlyChanged;
 
 
 	static const int        cColorWidth = 640;
