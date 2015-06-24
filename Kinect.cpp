@@ -441,7 +441,7 @@ BOOL Kinect::processSkeleton(int k){
 #endif
 
 	if (FAILED(hr)){
-		printf("FAILED To choose skeleton\n");
+		//printf("FAILED To choose skeleton\n");
 		return hr;
 	}
 

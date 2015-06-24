@@ -101,7 +101,7 @@ int main()
 			ScreenCapture(0, 0, 1920, 1080, (char *)destName.c_str());
 
 			timeScreenshot = gf_sys_clock_high_res() - sys_start;
-			//printf("\t\tTIME SCREENSHOT : %llu\n", timeScreenshot);
+			printf("\t\tTIME SCREENSHOT : %llu\n", timeScreenshot);
 			im_num++;
 			
 			if (im_refJSON == 1){
@@ -131,7 +131,7 @@ int main()
 				//muxer_open_segment(muxer, "C:/wamp/www/LOOOK/output", "seg", seg_num);
 				muxer_open_segment(muxer, "output", "seg", seg_num);
 				timeref = gf_sys_clock_high_res() - sys_start;
-				//printf("\t\t\t\tOpening segment time : %llu\n", timeref);
+				printf("\t\t\t\tOpening segment time : %llu\n", timeref);
 			}
 
 			res = muxer_write_frame(muxer, i);
