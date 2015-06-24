@@ -34,22 +34,19 @@ int main()
 	std::ostringstream testStream;
 	std::ofstream testFile;
 
+	std::ostringstream finalStream;
+
 	std::ostringstream imListStream;
 	int im_num = 0;
 	int im_refJSON = 1;
 
 	std::ostringstream skelListStream;
 
-	vidListStream << "seg_init_gpac.mp4\n";
+	vidListStream << "],\n\"Video_Segment\": \"seg_init_gpac.mp4\"}\n";
 	testStream << "seg_init_gpac.mp4\n";
 
 	BOOL resKinect;
 	INPUT newSlideInput;
-	
-	u8 *data = (u8 *)malloc(data_size);
-
-	//make a white frame
-	//memset(data, 0xFF, data_size);
 
 	Kinect kinect;
 
@@ -108,19 +105,19 @@ int main()
 			im_num++;
 			
 			if (im_refJSON == 1){
-				imListStream << " \"" << im_refJSON << "\":" << "im_" << im_num << ".png\", \"Since_open\": \"" << timeScreenshot - timeref << "\"";
+				imListStream << "{\"" << im_refJSON << "\":" << "\"im_" << im_num << ".png\", \"Since_open\": \"" << timeScreenshot - timeref << "\"}";
 			}
 			else{
-				imListStream << ", \"" << im_refJSON << "\":" << "im_" << im_num << ".png\", \"Since_open\": \"" << timeScreenshot - timeref << "\"";
+				imListStream << ", {\"" << im_refJSON << "\":" << "\"im_" << im_num << ".png\", \"Since_open\": \"" << timeScreenshot - timeref << "\"}";
 			}
 			im_refJSON++;
 		}
 
 		if ((i % 30 + 1) == 30){
-			skelListStream << "\"" << i % 30 + 1 << "\": \"Coordinates_" << i << ".json\"\n\t\t\t\t";
+			skelListStream << "{\"" << i % 30 + 1 << "\": \"Coordinates_" << i << ".json\"}\n\t\t\t\t";
 		}
 		else{
-			skelListStream << "\"" << i % 30 + 1 << "\": \"Coordinates_" << i << ".json\",\n\t\t\t\t";
+			skelListStream << "{\"" << i % 30 + 1 << "\": \"Coordinates_" << i << ".json\"},\n\t\t\t\t";
 		}
 		pts = gf_sys_clock_high_res() - sys_start;
 
@@ -145,17 +142,26 @@ int main()
 				// Write playlist
 				tmp = vidListStream.str();
 				vidListStream.seekp(0);
-				vidListStream << "\n\t[\n\t\t{ \n\t\t\"Open_segment_time\":" << "\"" << timeref << "\",";
-				vidListStream << "\n\t\t\"Video_Segment\": seg_" << seg_num << "_gpac.m4s,\n\t\t\"Skel_Segments\":";
-				vidListStream << "[{" << skelListStream.str() << "}],\n\t\t";
-				vidListStream << "\"Slides\": [{" << imListStream.str() << "}]\n";
-				vidListStream << "\t\t}\n\t]\n";
+				vidListStream << "\n\t\t{ \n\t\t\"Open_segment_time\":" << "\"" << timeref << "\",";
+				vidListStream << "\n\t\t\"Video_Segment\": \"seg_" << seg_num << "_gpac.m4s\",\n\t\t\"Skel_Segments\":";
+				vidListStream << "[" << skelListStream.str() << "],\n\t\t";
+				vidListStream << "\"Slides\": [" << imListStream.str() << "]\n";
+				
+				if (seg_num == 1){
+					vidListStream << "\t\t}\n";
+				}
+				else{
+					vidListStream << "\t\t},\n";
+				}
 
 				vidListStream << tmp;
+
+				finalStream << "{\"Playlist\":\n\t[" << vidListStream.str();
 				vidPlaylist.open("output\\playlist.txt");
-				vidPlaylist << vidListStream.str();
+				vidPlaylist << finalStream.str();
 				vidPlaylist.close();
 
+				finalStream.str("");
 				imListStream.str("");
 				skelListStream.str("");
 
@@ -176,7 +182,7 @@ int main()
 				// if we made a screenshot during the previous segment, report it in the next segment
 				if (im_refJSON > 1){
 					im_refJSON = 1;
-					imListStream << "\"" << im_refJSON << "\":" << "im_" << im_num << ".png\", \"Since_open\": \"" << 0.0 << "\"";
+					imListStream << "{\"" << im_refJSON << "\":" << "\"im_" << im_num << ".png\", \"Since_open\": \"" << 0.0 << "\"}";
 					im_refJSON++;
 				}
 				seg_num++;
@@ -189,7 +195,6 @@ int main()
 		muxer_close_segment(muxer);
 	}
 	muxer_delete(muxer);
-	free(data);
 	free(kinectFrame);
 
 	system("PAUSE");
