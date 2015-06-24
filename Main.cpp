@@ -23,7 +23,6 @@ int main()
 	u64 now;
 	u64 timeref;
 	u64 timeScreenshot =0.0;
-	u64 lastScreenshot = 0.0;
 
 	std::ostringstream destStream;
 	std::string destName;
@@ -32,6 +31,9 @@ int main()
 	std::ofstream vidPlaylist;
 	std::string tmp;
 
+	std::ostringstream testStream;
+	std::ofstream testFile;
+
 	std::ostringstream imListStream;
 	int im_num = 0;
 	int im_refJSON = 1;
@@ -39,6 +41,7 @@ int main()
 	std::ostringstream skelListStream;
 
 	vidListStream << "seg_init_gpac.mp4\n";
+	testStream << "seg_init_gpac.mp4\n";
 
 	BOOL resKinect;
 	INPUT newSlideInput;
@@ -73,7 +76,7 @@ int main()
 	for (i = 0; i<nb_test_frames; i++) {
 		u64 pts;
 
-		// Update kinectFrameData 
+		// Update kinectFrafsincemeData 
 		BOOL resKinect = kinect.update(&kinectFrame, &now, i);
 
 		// If gesture is detected, switching slides, preparing image playlist
@@ -99,15 +102,16 @@ int main()
 			destStream << "C:\\Users\\Martin\\ColorBasics-D2D\\output\\screen\\im_" << im_num << ".png";
 			destName = destStream.str();
 			ScreenCapture(0, 0, 1920, 1080, (char *)destName.c_str());
-			lastScreenshot = timeScreenshot;
+
 			timeScreenshot = gf_sys_clock_high_res() - sys_start;
+			//printf("\t\tTIME SCREENSHOT : %llu\n", timeScreenshot);
 			im_num++;
 			
 			if (im_refJSON == 1){
-				imListStream << " \"" << im_refJSON << "\":" << "im_" << im_num << ".png\", \"Time_after_segment\": \"" << timeScreenshot - lastScreenshot << "\"";
+				imListStream << " \"" << im_refJSON << "\":" << "im_" << im_num << ".png\", \"Since_open\": \"" << timeScreenshot - timeref << "\"";
 			}
 			else{
-				imListStream << ", \"" << im_refJSON << "\":" << "im_" << im_num << ".png\", \"Time_after_segment\": \"" << timeScreenshot - lastScreenshot << "\"";
+				imListStream << ", \"" << im_refJSON << "\":" << "im_" << im_num << ".png\", \"Since_open\": \"" << timeScreenshot - timeref << "\"";
 			}
 			im_refJSON++;
 		}
@@ -127,6 +131,7 @@ int main()
 		if (res) {
 			//need to start the segment (this will generate the init segment on the first pass)
 			if (!muxer->segment_started) {
+				//muxer_open_segment(muxer, "C:/wamp/www/LOOOK/output", "seg", seg_num);
 				muxer_open_segment(muxer, "output", "seg", seg_num);
 				timeref = gf_sys_clock_high_res() - sys_start;
 				//printf("\t\t\t\tOpening segment time : %llu\n", timeref);
@@ -154,12 +159,24 @@ int main()
 				imListStream.str("");
 				skelListStream.str("");
 
+				/*
+				tmp = testStream.str();
+				testStream.str("");
+				testStream << "seg_" << seg_num << "_gpac.m4s\n";
+				testStream << tmp;
+				testFile.open("C:/wamp/www/LOOOK/playlist.txt");
+				if (testFile.is_open()){
+					printf("file open\n");
+					testFile << testStream.str();
+				}
+				
+				testFile.close();
+				*/
+
 				// if we made a screenshot during the previous segment, report it in the next segment
 				if (im_refJSON > 1){
 					im_refJSON = 1;
-					imListStream << "\"" << im_refJSON << "\":" << "im_" << im_num << ".png\", \"Time_after_segment\": \"" << 0.0 << "\"";
-					lastScreenshot = timeScreenshot;
-					timeScreenshot = gf_sys_clock_high_res() - sys_start;
+					imListStream << "\"" << im_refJSON << "\":" << "im_" << im_num << ".png\", \"Since_open\": \"" << 0.0 << "\"";
 					im_refJSON++;
 				}
 				seg_num++;

@@ -316,11 +316,11 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 	//NUI_IMAGE_FRAME imageFrame;
 
 	// Background : part of the color frame with removed background
-	LARGE_INTEGER colorTimeStamp;
+	LARGE_INTEGER colorTimeStamp; 
 
 
 	// Attempt to get the color frame
-	hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pColorStreamHandle, 20, &imageFrame);
+	hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pColorStreamHandle, 30, &imageFrame);
 	if (FAILED(hr))
 	{
 		static int nbFail = 0;
