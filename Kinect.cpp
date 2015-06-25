@@ -18,8 +18,6 @@ FLOAT dotR[3];
 FLOAT dotL[3];
 FLOAT distElbow = 0;
 
-LPDWORD info;
-
 //#define BACKGROUND
 
 Kinect::Kinect() : 
@@ -106,18 +104,6 @@ Kinect::~Kinect()
 	m_pBackgroundRemovalStream = NULL;
 }
 
-BOOL Kinect::update(unsigned char ** dest, u64 * time, int i)
-{
-	BOOL b = false;
-	if (m_pNuiSensor == NULL)
-		return b = false;
-	//printf("\n********************* update\n");
-
-		//printf("debut process (kinect)\n");
-		b = process(dest, time, i);
-		//printf("sortie de process (kinect)\n");
-	return b;
-}
 
 HRESULT Kinect::createFirstConnected()
 {
@@ -242,8 +228,6 @@ HRESULT Kinect::createBackgroundRemovedColorStream(){
 
 	hr = m_pBackgroundRemovalStream->Enable(NUI_IMAGE_RESOLUTION_640x480, NUI_IMAGE_RESOLUTION_320x240, m_hNextBackgroundRemovedFrameEvent);
 
-	GetHandleInformation(m_pBackgroundRemovalStream, info);
-
 	if (FAILED(hr)){
 		printf("\t\t*** FAILED TO ENABLE BACKGROUND ***\n");
 		return hr;
@@ -258,9 +242,7 @@ HRESULT Kinect::ComposeImage(){
 	NUI_BACKGROUND_REMOVED_COLOR_FRAME removedFrame;
 
 	// Gets the next frame of data from the background removed color stream
-	hr = m_pBackgroundRemovalStream->GetNextFrame(1000, &removedFrame);
-
-	GetHandleInformation(m_pBackgroundRemovalStream, info);
+	hr = m_pBackgroundRemovalStream->GetNextFrame(100, &removedFrame);
 
 	if (FAILED(hr)){
 		printf("FAILED getting the next background removed color frame\n");
@@ -296,7 +278,6 @@ HRESULT Kinect::ComposeImage(){
 
 	hr = m_pBackgroundRemovalStream->ReleaseFrame(&removedFrame);
 
-	GetHandleInformation(m_pBackgroundRemovalStream, info);
 
 	if (FAILED(hr)){
 		return hr;
@@ -308,7 +289,7 @@ HRESULT Kinect::ComposeImage(){
 
 HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 
-	//printf("\t\tProcess Color\n");
+	printf("\t\tProcess Color\n");
 	HRESULT hr;
 	HRESULT bghr S_OK;
 
@@ -344,8 +325,6 @@ HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 
 #ifdef BACKGROUND
 		bghr = m_pBackgroundRemovalStream->ProcessColor(cColorWidth*cColorHeight * 4, m_LockedRect.pBits, colorTimeStamp);		
-
-		GetHandleInformation(m_pBackgroundRemovalStream, info);
 
 		if (FAILED(bghr)){
 			printf("FAILED processing color data\n");
@@ -416,14 +395,16 @@ BOOL Kinect::processSkeleton(int k){
 	ofstream file;
 	ostringstream destFile;
 
+	printf("Process Skeleton\n");
+
 	NUI_SKELETON_FRAME skeletonFrame;
 	hr = m_pNuiSensor->NuiSkeletonGetNextFrame(30, &skeletonFrame);
 	u64 time = gf_sys_clock_high_res();
 	
 	if (FAILED(hr)){
 		//printf("\t\t\tFAILED SKELETON\n");
-		destFile.str("");
-		destFile << "output\\skelcoord\\Coordinates_" << k << ".json";
+		destFile.str(""); 
+		destFile << "output\\public\\output\\skelcoord\\Coordinates_" << k << ".json";
 		file.open(destFile.str());
 		file.close();
 		return false;
@@ -438,18 +419,17 @@ BOOL Kinect::processSkeleton(int k){
 	//Choose the skeleton that we need to remove the background. May replace the for loop?
 #ifdef BACKGROUND
 	hr = ChooseSkeleton(skeletonData);
-#endif
 
 	if (FAILED(hr)){
 		//printf("FAILED To choose skeleton\n");
-		return hr;
+		return false;
 	}
+
+#endif
 
 	// Background removal processing
 #ifdef BACKGROUND
 	hr = m_pBackgroundRemovalStream->ProcessSkeleton(NUI_SKELETON_COUNT, skeletonData, skeletonFrame.liTimeStamp);
-
-	GetHandleInformation(m_pBackgroundRemovalStream, info);
 	
 	if (FAILED(hr)){
 		printf("\t\tFailed to Process skeleton BACKGROUND\n");
@@ -523,14 +503,14 @@ BOOL Kinect::processSkeleton(int k){
 			*/	
 
 			/* MOVEMENT 2 ref */
-			printf("DIST %f\n", distElbow);
+			//printf("DIST %f\n", distElbow);
 			if ((distElbow < 0.12)
 				&& (skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_RIGHT].y > skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].y)
 				&& (skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_LEFT].y > skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].y)
 				){
 				
-				printf("SINCE LAST CHANGE : %llu\n", gf_sys_clock_high_res() - recentlyChanged);
-				if ((gf_sys_clock_high_res() - recentlyChanged) > 300000){
+				//printf("SINCE LAST CHANGE : %llu\n", gf_sys_clock_high_res() - recentlyChanged);
+				if ((gf_sys_clock_high_res() - recentlyChanged) > 900000){
 					printf("\tCHANGE SLIDE\n");
 					recentlyChanged = gf_sys_clock_high_res();
 					return true;
@@ -543,6 +523,7 @@ BOOL Kinect::processSkeleton(int k){
 	}
 
 	if (!savedSkelCoord){
+		printf("Failed save skel\n");
 		destFile.str("");
 		destFile << "output\\skelcoord\\Coordinates_" << k << ".json";
 		file.open(destFile.str());
@@ -591,7 +572,6 @@ HRESULT Kinect::processDepth(){
 			m_depthWidth * m_depthHeight * 4, lockedRect.pBits, depthTimeStamp);
 	}
 
-	GetHandleInformation(m_pBackgroundRemovalStream, info);
 
 	// Unlocking textures
 	texture->UnlockRect(0);
@@ -615,38 +595,32 @@ HRESULT Kinect::processDepth(){
 
 BOOL Kinect::process(unsigned char ** dest, u64 * time, int i)
 {
-	BOOL b = true;
+	BOOL b = false;
 
 	if (NULL == m_pNuiSensor)
 	{
-		return E_FAIL;;
+		return false;
 	}
 
-	
-	//printf("\tProcess\n");
-
-
-	//if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextColorFrameEvent, 0)){
+	//if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextColorFrameEvent, 30)){
 		processColor(dest, time);
 	//}
 
-	//printf("\t\tWait skeleton\n");
-	//if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextSkeletonEvent, 0)){
-		b = processSkeleton(i);
+	//if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextSkeletonEvent, 30)){
+	b = processSkeleton(i);
 	//}
 
 #ifdef BACKGROUND
 
 	//printf("\t\tWait depth\n");
-	//if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextDepthFrameEvent, 0)){
+	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextDepthFrameEvent, 100)){
 		processDepth(); // Background
-	//}
-
+	}
+	
 	printf("\t\tWait Background\n");
-	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextBackgroundRemovedFrameEvent, 500)){
+	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextBackgroundRemovedFrameEvent, 10)){
 		ComposeImage(); // Background
 	}
-
 #endif	
 	
 	return b;
@@ -669,7 +643,6 @@ void Kinect:: skelCoordToColorCoord(Vector4 skelCoords, LONG ** dest){
 
 void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j, u64 time)
 {
-
 	FLOAT depthX =0;
 	FLOAT depthY=0;
 	LONG colorX=0;
@@ -678,7 +651,6 @@ void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j, u64 time)
 	std::string dest = "";
 	std::ostringstream destination;
 
-	//printf("\t\t\tSave Skeleton\n");
 	std::string boneNames[20];
 	std::ostringstream tmp;
 	std::ostringstream coordString;
@@ -728,7 +700,7 @@ void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j, u64 time)
 	resultStream << "\n]}";
 	ofstream myfile;
 	destination.str("");
-	destination << "output\\skelcoord\\Coordinates_" << j << ".json";
+	destination << "output\\public\\output\\skelcoord\\Coordinates_" << j << ".json";
 	dest = destination.str();
 
 	myfile.open(dest);
@@ -847,8 +819,6 @@ HRESULT Kinect::ChooseSkeleton(NUI_SKELETON_DATA* pSkeletonData){
 	if (!isTrackedSkeletonVisible && closestSkeleton != NUI_SKELETON_INVALID_TRACKING_ID)
 	{
 		hr = m_pBackgroundRemovalStream->SetTrackedPlayer(closestSkeleton);
-
-		GetHandleInformation(m_pBackgroundRemovalStream, info);
 
 		if (FAILED(hr))
 		{

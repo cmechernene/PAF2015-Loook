@@ -21,11 +21,6 @@ public:
 	~Kinect();
 
 	/// <summary>
-	/// Main processing function
-	/// </summary>
-	BOOL                   update(unsigned char ** des, u64 * time, int i);
-
-	/// <summary>
 	/// Create the first connected Kinect found 
 	/// </summary>
 	/// <returns>S_OK on success, otherwise failure code</returns>
@@ -52,8 +47,6 @@ public:
 private:
 
 	NUI_LOCKED_RECT m_LockedRect;
-
-	//bool					m_SeatedMode;
 
 	// Current Kinect
 	INuiSensor*             m_pNuiSensor;

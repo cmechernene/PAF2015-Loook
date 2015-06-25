@@ -20,8 +20,8 @@ int main()
 	int seg_num = 1;
 	u32 data_size = width * height * 3;
 
-	u64 now;
-	u64 timeref;
+	u64 now=0.0;
+	u64 timeref =0.0;
 	u64 timeScreenshot =0.0;
 
 	std::ostringstream destStream;
@@ -43,9 +43,9 @@ int main()
 	std::ostringstream skelListStream;
 
 	vidListStream << "],\n\"Video_Segment\": \"seg_init_gpac.mp4\"}\n";
-	testStream << "seg_init_gpac.mp4\n";
+	testStream << "http://137.194.17.21:8080/output/seg_init_gpac.mp4\n";
 
-	BOOL resKinect;
+	BOOL resKinect = false;
 	INPUT newSlideInput;
 
 	Kinect kinect;
@@ -66,7 +66,7 @@ int main()
 		return 1;
 	}
 	//try to generate 4 seconds (eg 4 segments)
-	nb_test_frames = 30 * 4;
+	nb_test_frames = 30 * 30;
 
 	sys_start = gf_sys_clock_high_res();
 
@@ -74,9 +74,9 @@ int main()
 		u64 pts;
 
 		// Update kinectFrafsincemeData 
-		BOOL resKinect = kinect.update(&kinectFrame, &now, i);
+		resKinect = kinect.process(&kinectFrame, &now, i);
 
-		// If gesture is detected, switching slides, preparing image playlist
+		// If gesture is detected, switching slides, prepare image playlist
 		if (resKinect){
 			printf("Changed Slide\n");
 			newSlideInput.type = INPUT_KEYBOARD;
@@ -85,7 +85,7 @@ int main()
 			newSlideInput.ki.dwExtraInfo = 0;
 
 			// PRESS right key
-			newSlideInput.ki.wVk = 0x41;//VK_RIGHT; // right arrow key
+			newSlideInput.ki.wVk = VK_RIGHT; // right arrow key
 			newSlideInput.ki.dwFlags = 0; // key press
 			SendInput(1, &newSlideInput, sizeof(INPUT));
 
@@ -129,7 +129,7 @@ int main()
 			//need to start the segment (this will generate the init segment on the first pass)
 			if (!muxer->segment_started) {
 				//muxer_open_segment(muxer, "C:/wamp/www/LOOOK/output", "seg", seg_num);
-				muxer_open_segment(muxer, "output", "seg", seg_num);
+				muxer_open_segment(muxer, "output/public/output", "seg", seg_num);
 				timeref = gf_sys_clock_high_res() - sys_start;
 				printf("\t\t\t\tOpening segment time : %llu\n", timeref);
 			}
@@ -165,19 +165,15 @@ int main()
 				imListStream.str("");
 				skelListStream.str("");
 
-				/*
-				tmp = testStream.str();
-				testStream.str("");
-				testStream << "seg_" << seg_num << "_gpac.m4s\n";
-				testStream << tmp;
-				testFile.open("C:/wamp/www/LOOOK/playlist.txt");
+				
+				testStream << "http://137.194.17.21:8080/output/seg_" << seg_num << "_gpac.m4s\n";
+				testFile.open("output/public/output/playlist.txt");
 				if (testFile.is_open()){
 					printf("file open\n");
 					testFile << testStream.str();
 				}
 				
 				testFile.close();
-				*/
 
 				// if we made a screenshot during the previous segment, report it in the next segment
 				if (im_refJSON > 1){
