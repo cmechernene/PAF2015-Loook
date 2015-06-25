@@ -84,10 +84,6 @@ Kinect::Kinect() :
 Kinect::~Kinect()
 {
 
-	// clean up arrays
-	delete[] m_outputRGBX;
-	delete[] m_backgroundRGBX;
-
 	if (m_pNuiSensor)
 		m_pNuiSensor->NuiShutdown(); // éteint la caméra de la kinect
 
@@ -97,9 +93,12 @@ Kinect::~Kinect()
 	if (m_hNextSkeletonEvent && (m_hNextSkeletonEvent != INVALID_HANDLE_VALUE))
 		CloseHandle(m_hNextSkeletonEvent);
 
+	// clean up arrays
+	delete[] m_outputRGBX;
+	delete[] m_backgroundRGBX;
+
 	CloseHandle(m_hNextBackgroundRemovedFrameEvent);
 	CloseHandle(m_hNextDepthFrameEvent);
-
 	m_pNuiSensor = NULL;
 	m_pBackgroundRemovalStream = NULL;
 }
@@ -402,7 +401,7 @@ BOOL Kinect::processSkeleton(int k){
 	u64 time = gf_sys_clock_high_res();
 	
 	if (FAILED(hr)){
-		//printf("\t\t\tFAILED SKELETON\n");
+		printf("\t\t\tFAILED SKELETON\n");
 		destFile.str(""); 
 		destFile << "output\\public\\output\\skelcoord\\Coordinates_" << k << ".json";
 		file.open(destFile.str());
@@ -613,14 +612,14 @@ BOOL Kinect::process(unsigned char ** dest, u64 * time, int i)
 #ifdef BACKGROUND
 
 	//printf("\t\tWait depth\n");
-	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextDepthFrameEvent, 100)){
+	//if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextDepthFrameEvent, 100)){
 		processDepth(); // Background
-	}
+	//}
 	
 	printf("\t\tWait Background\n");
-	if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextBackgroundRemovedFrameEvent, 10)){
+	//if (WAIT_OBJECT_0 == WaitForSingleObject(m_hNextBackgroundRemovedFrameEvent, 10)){
 		ComposeImage(); // Background
-	}
+	//}
 #endif	
 	
 	return b;

@@ -24,6 +24,8 @@ int main()
 	u64 timeref =0.0;
 	u64 timeScreenshot =0.0;
 
+	std::string ipAddr = "137.194.17.21";
+
 	std::ostringstream destStream;
 	std::string destName;
 
@@ -43,7 +45,7 @@ int main()
 	std::ostringstream skelListStream;
 
 	vidListStream << "],\n\"Video_Segment\": \"seg_init_gpac.mp4\"}\n";
-	testStream << "http://137.194.17.21:8080/output/seg_init_gpac.mp4\n";
+	testStream << "http://" << ipAddr << ":8080/output/seg_init_gpac.mp4\n";
 
 	BOOL resKinect = false;
 	INPUT newSlideInput;
@@ -166,7 +168,7 @@ int main()
 				skelListStream.str("");
 
 				
-				testStream << "http://137.194.17.21:8080/output/seg_" << seg_num << "_gpac.m4s\n";
+				testStream << "http://" << ipAddr << ":8080/output/seg_" << seg_num << "_gpac.m4s\n";
 				testFile.open("output/public/output/playlist.txt");
 				if (testFile.is_open()){
 					printf("file open\n");
