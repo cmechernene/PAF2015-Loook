@@ -34,7 +34,7 @@ public:
 	BOOL					processSkeleton(int i);
 
 	void skelCoordToColorCoord(Vector4 skelCoords, LONG ** dest);
-	void SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int i, u64 t);
+	void SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int i, u64 t, BOOL highlight);
 	HRESULT SaveBitmapToFile(BYTE* pBitmapBits, LONG lWidth, LONG lHeight, WORD wBitsPerPixel, LPCWSTR lpszFilePath);
 	void GetScreenshotFileName(wchar_t *screenshotName, UINT screenshotNameSize);
 

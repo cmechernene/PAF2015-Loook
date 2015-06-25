@@ -68,7 +68,7 @@ int main()
 		return 1;
 	}
 	//try to generate 4 seconds (eg 4 segments)
-	nb_test_frames = 30 * 30;
+	nb_test_frames = 30 * 60;
 
 	sys_start = gf_sys_clock_high_res();
 

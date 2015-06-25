@@ -13,12 +13,12 @@ std::ostringstream skelString;
 std::string temp;
 std::ofstream skelPlaylist;
 
-FLOAT x1R, y1R, z1R, x2R, y2R, z2R, x1L, y1L, z1L, x2L, y2L, z2L;
-FLOAT dotR[3];
-FLOAT dotL[3];
+FLOAT x1R, x1L;
+
 FLOAT distElbow = 0;
 
 //#define BACKGROUND
+#define HANDPOS
 
 Kinect::Kinect() : 
 	m_hNextColorFrameEvent(INVALID_HANDLE_VALUE), //sert a detecter un evenement camera video
@@ -288,12 +288,9 @@ HRESULT Kinect::ComposeImage(){
 
 HRESULT Kinect::processColor(unsigned char ** dest, u64 * time){
 
-	printf("\t\tProcess Color\n");
+	//printf("\t\tProcess Color\n");
 	HRESULT hr;
 	HRESULT bghr S_OK;
-
-	// Glob var to skeleton conversion to rgb coordinates
-	//NUI_IMAGE_FRAME imageFrame;
 
 	// Background : part of the color frame with removed background
 	LARGE_INTEGER colorTimeStamp; 
@@ -424,15 +421,12 @@ BOOL Kinect::processSkeleton(int k){
 		return false;
 	}
 
-#endif
-
 	// Background removal processing
-#ifdef BACKGROUND
 	hr = m_pBackgroundRemovalStream->ProcessSkeleton(NUI_SKELETON_COUNT, skeletonData, skeletonFrame.liTimeStamp);
 	
 	if (FAILED(hr)){
 		printf("\t\tFailed to Process skeleton BACKGROUND\n");
-		return hr;
+		return false;
 	}
 #endif
 
@@ -443,63 +437,33 @@ BOOL Kinect::processSkeleton(int k){
 		NUI_SKELETON_TRACKING_STATE trackingState = skeletonData[i].eTrackingState;
 		if (NUI_SKELETON_TRACKED == trackingState){
 			savedSkelCoord = true;
-			//Draw the tracked skeleton
-			//printf("\t\t\t1 Skeleton tracked\n");	
-			SaveSkeletonToFile(skeletonData[i], k, time);
-			hr = 0;
 
 			// Gesture recognition
-			x1R = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].x - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_RIGHT].x;
-			y1R = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].y - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_RIGHT].y;
-			z1R = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].z - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_RIGHT].z;
+			x1R = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_RIGHT].x;
 
-			x1L = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].x - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_LEFT].x;
-			y1L = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].y - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_LEFT].y;
-			z1L = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].z - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_LEFT].z;
+			x1L = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_LEFT].x;
 
-			x2R = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_RIGHT].x - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].x;
-			y2R = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_RIGHT].y - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].y;
-			z2R = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_RIGHT].z - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].z;
-
-			x2L = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_LEFT].x - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].x;
-			y2L = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_LEFT].y - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].y;
-			z2L = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_LEFT].z - skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].z;
-
-			
-			dotR[0] = y1R*z2R - z1R*y2R;
-			dotR[1] = z1R*x2R - x1R*z2R;
-			dotR[2] = x1R*y2R - y1R*x2R;
-
-			dotR[0] = y1L*z2L - z1L*y2L;
-			dotR[1] = z1L*x2L - x1L*z2L;
-			dotR[2] = x1L*y2L - y1L*x2L;
-
-			//printf("Produit DROIT : %f, %f, %f\n\n", dotR[0], dotR[1], dotR[2]);
-			/*if ((-0.0258 < dotR[0]) && (dotR[0] < 0.0258) && (-0.0258 < dotR[1]) && (dotR[1] < 0.0258) && (-0.0258 < dotR[2]) && (dotR[2] < 0.0258)){
-				printf("\tProduit NUL\n\n");
-
-				if ((-0.0258 < dotR[0]) && (dotR[0] < 0.0258) && (-0.0258 < dotR[1]) && (dotR[1] < 0.0258) && (-0.0258 < dotR[2]) && (dotR[2] < 0.0258)){
-
-				}
+			printf("SHOULDER : %f", x1R-x1L);
+#ifdef HANDPOS
+			if(x1R-x1L <0.19){
+				SaveSkeletonToFile(skeletonData[i], k, time, true);
 			}
 			else{
-				printf("\n=/= 0\n");
+				SaveSkeletonToFile(skeletonData[i], k, time, false);
 			}
-			*/
+#endif
 
+#ifndef HANDPOS
+			//Draw the tracked skeleton
+			//printf("\t\t\t1 Skeleton tracked\n");	
+			SaveSkeletonToFile(skeletonData[i], k, time, false);
+#endif
 			Vector4 leftElbow = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT];
 			Vector4 rightElbow = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT];
 			
 			FLOAT distElbow = sqrt((leftElbow.x - rightElbow.x)*(leftElbow.x - rightElbow.x)
 				+ (leftElbow.y - rightElbow.y)*(leftElbow.y - rightElbow.y)
 				+ (leftElbow.z - rightElbow.z)*(leftElbow.z - rightElbow.z));
-
-			/* MOVEMENT 1 ref
-			if ((skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_RIGHT].x > skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].x)
-				&& (skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_RIGHT].y > skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].y)
-				&& (skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_LEFT].x < skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].x)
-				&& (skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_LEFT].y > skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].y)){
-			*/	
 
 			/* MOVEMENT 2 ref */
 			//printf("DIST %f\n", distElbow);
@@ -524,7 +488,7 @@ BOOL Kinect::processSkeleton(int k){
 	if (!savedSkelCoord){
 		printf("Failed save skel\n");
 		destFile.str("");
-		destFile << "output\\skelcoord\\Coordinates_" << k << ".json";
+		destFile << "output\\public\\output\\skelcoord\\Coordinates_" << k << ".json";
 		file.open(destFile.str());
 		file.close();
 	}
@@ -640,7 +604,7 @@ void Kinect:: skelCoordToColorCoord(Vector4 skelCoords, LONG ** dest){
 	return;
 }
 
-void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j, u64 time)
+void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j, u64 time, BOOL highlight)
 {
 	FLOAT depthX =0;
 	FLOAT depthY=0;
@@ -679,22 +643,41 @@ void Kinect::SaveSkeletonToFile(const NUI_SKELETON_DATA & skel, int j, u64 time)
 	boneNames[19] = "Foot_Right";
 
 	resultStream << "{\"Skeleton\":[\n\t";
+	if (highlight){
+		for (int i = 0; i < 20; i++){
+			coordString.str("");
+			tmp.str("");
+			colorString.str("");
+			skelCoordToColorCoord(skel.SkeletonPositions[i], &res);
 
-	for (int i = 0; i < 20; i++){
-		coordString.str("");
-		tmp.str("");
-		colorString.str("");
-		skelCoordToColorCoord(skel.SkeletonPositions[i], &res);
+			colorString << "{\"X\": \"" << res[0] << "\", \"Y\" : \"" << res[1] << "\"}";
+			coordString << "{\"X\": \"" << skel.SkeletonPositions[i].x << "\", \"Y\": \"" << skel.SkeletonPositions[i].y << "\", \"Z\": \"" << skel.SkeletonPositions[i].z << "\"}";
+			if (i == 19){
+				tmp << "\n\t{\n\t\"Name\":\"" << boneNames[i] << "\",\n\t\"Coordinates\":" << coordString.str() << ",\n\t\"Screen_Coordinates\":" << colorString.str() << ",\n\t\"Hightlight\": \"true\"\n\t}\n\t";
+			}
+			else{
+				tmp << "\n\t{\n\t\"Name\":\"" << boneNames[i] << "\",\n\t\"Coordinates\":" << coordString.str() << ",\n\t\"Screen_Coordinates\":" << colorString.str() << ",\n\t\"Hightlight\": \"true\"\n\t},\n\t";
+			}
+			resultStream << tmp.str();
+		}
+	}
+	else{
+		for (int i = 0; i < 20; i++){
+			coordString.str("");
+			tmp.str("");
+			colorString.str("");
+			skelCoordToColorCoord(skel.SkeletonPositions[i], &res);
 
-		colorString << "{\"X\": \"" << res[0] << "\", \"Y\" : \"" << res[1] << "\"}";
-		coordString << "{\"X\": \"" << skel.SkeletonPositions[i].x << "\", \"Y\": \"" << skel.SkeletonPositions[i].y << "\", \"Z\": \"" << skel.SkeletonPositions[i].z << "\"}";
-		if (i == 19){
-			tmp << "\n\t{\n\t\"Name\":\"" << boneNames[i] << "\",\n\t\"Coordinates\":" << coordString.str() << ",\n\t\"Screen_Coordinates\":" << colorString.str() << "\n\t}\n\t";
+			colorString << "{\"X\": \"" << res[0] << "\", \"Y\" : \"" << res[1] << "\"}";
+			coordString << "{\"X\": \"" << skel.SkeletonPositions[i].x << "\", \"Y\": \"" << skel.SkeletonPositions[i].y << "\", \"Z\": \"" << skel.SkeletonPositions[i].z << "\"}";
+			if (i == 19){
+				tmp << "\n\t{\n\t\"Name\":\"" << boneNames[i] << "\",\n\t\"Coordinates\":" << coordString.str() << ",\n\t\"Screen_Coordinates\":" << colorString.str() << "\n\t}\n\t";
+			}
+			else{
+				tmp << "\n\t{\n\t\"Name\":\"" << boneNames[i] << "\",\n\t\"Coordinates\":" << coordString.str() << ",\n\t\"Screen_Coordinates\":" << colorString.str() << "\n\t},\n\t";
+			}
+			resultStream << tmp.str();
 		}
-		else{
-			tmp << "\n\t{\n\t\"Name\":\"" << boneNames[i] << "\",\n\t\"Coordinates\":" << coordString.str() << ",\n\t\"Screen_Coordinates\":" << colorString.str() << "\n\t},\n\t";
-		}
-		resultStream << tmp.str();
 	}
 	resultStream << "\n]}";
 	ofstream myfile;
