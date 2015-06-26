@@ -18,7 +18,7 @@ FLOAT x1R, x1L;
 FLOAT distElbow = 0;
 
 //#define BACKGROUND
-#define HANDPOS
+//#define HANDPOS
 
 Kinect::Kinect() : 
 	m_hNextColorFrameEvent(INVALID_HANDLE_VALUE), //sert a detecter un evenement camera video
@@ -398,11 +398,11 @@ BOOL Kinect::processSkeleton(int k){
 	u64 time = gf_sys_clock_high_res();
 	
 	if (FAILED(hr)){
-		printf("\t\t\tFAILED SKELETON\n");
+		printf("\tFAILED SKELETON\n");
 		destFile.str(""); 
 		destFile << "output\\public\\output\\skelcoord\\Coordinates_" << k << ".json";
-		file.open(destFile.str());
-		file.close();
+		//file.open(destFile.str());
+		//file.close();
 		return false;
 	}
 
@@ -443,7 +443,7 @@ BOOL Kinect::processSkeleton(int k){
 
 			x1L = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_SHOULDER_LEFT].x;
 
-			printf("SHOULDER : %f", x1R-x1L);
+			//printf("SHOULDER : %f", x1R-x1L);
 #ifdef HANDPOS
 			if(x1R-x1L <0.19){
 				SaveSkeletonToFile(skeletonData[i], k, time, true);
@@ -456,8 +456,10 @@ BOOL Kinect::processSkeleton(int k){
 #ifndef HANDPOS
 			//Draw the tracked skeleton
 			//printf("\t\t\t1 Skeleton tracked\n");	
-			SaveSkeletonToFile(skeletonData[i], k, time, false);
+			//SaveSkeletonToFile(skeletonData[i], k, time, false);
 #endif
+
+
 			Vector4 leftElbow = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT];
 			Vector4 rightElbow = skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT];
 			
@@ -466,8 +468,8 @@ BOOL Kinect::processSkeleton(int k){
 				+ (leftElbow.z - rightElbow.z)*(leftElbow.z - rightElbow.z));
 
 			/* MOVEMENT 2 ref */
-			//printf("DIST %f\n", distElbow);
-			if ((distElbow < 0.12)
+			printf("\t\t\t\tDIST %f\n", distElbow);
+			if ((distElbow < 0.20)
 				&& (skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_RIGHT].y > skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_RIGHT].y)
 				&& (skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_WRIST_LEFT].y > skeletonData[i].SkeletonPositions[NUI_SKELETON_POSITION_ELBOW_LEFT].y)
 				){
@@ -480,17 +482,17 @@ BOOL Kinect::processSkeleton(int k){
 				}
 			}
 			else{
-				printf("STAY\n");
+				printf("\tSTAY\n");
 			}
 		}
 	}
 
 	if (!savedSkelCoord){
-		printf("Failed save skel\n");
+		printf("\tFailed save skel\n");
 		destFile.str("");
 		destFile << "output\\public\\output\\skelcoord\\Coordinates_" << k << ".json";
-		file.open(destFile.str());
-		file.close();
+		//file.open(destFile.str());
+		//file.close();
 	}
 
 	return false;

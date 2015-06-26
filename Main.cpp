@@ -20,14 +20,13 @@ int main()
 	int seg_num = 1;
 	u32 data_size = width * height * 3;
 
-	u64 now=0.0;
-	u64 timeref =0.0;
-	u64 timeScreenshot =0.0;
+	u64 now = 0;
+	u64 timeref = 0;
+	u64 timeScreenshot = 0;
 
-	std::string ipAddr = "137.194.17.21";
+	std::string ipAddr = "137.194.23.204";
 
 	std::ostringstream destStream;
-	std::string destName;
 
 	std::ostringstream vidListStream;
 	std::ofstream vidPlaylist;
@@ -41,6 +40,8 @@ int main()
 	std::ostringstream imListStream;
 	int im_num = 0;
 	int im_refJSON = 1;
+
+	BOOL printPNG = false;
 
 	std::ostringstream skelListStream;
 
@@ -68,7 +69,7 @@ int main()
 		return 1;
 	}
 	//try to generate 4 seconds (eg 4 segments)
-	nb_test_frames = 30 * 60;
+	nb_test_frames = 30 * 30;
 
 	sys_start = gf_sys_clock_high_res();
 
@@ -81,6 +82,9 @@ int main()
 		// If gesture is detected, switching slides, prepare image playlist
 		if (resKinect){
 			printf("Changed Slide\n");
+
+			im_num++;
+
 			newSlideInput.type = INPUT_KEYBOARD;
 			newSlideInput.ki.wScan = 0;
 			newSlideInput.ki.time = 0;
@@ -96,15 +100,14 @@ int main()
 			SendInput(1, &newSlideInput, sizeof(INPUT));
 
 			// Make sure we really switched slides before capturing screen
-			Sleep(100);
+			//Sleep(100);
 			destStream.str("");
-			destStream << "C:\\Users\\Martin\\ColorBasics-D2D\\output\\screen\\im_" << im_num << ".png";
-			destName = destStream.str();
-			ScreenCapture(0, 0, 1920, 1080, (char *)destName.c_str());
+			destStream << "C:\\Users\\Martin\\ColorBasics-D2D\\output\\public\\output\\im_" << im_num << ".png";
+			ScreenCapture(0, 0, 1920, 1080, (char *)destStream.str().c_str());
 
 			timeScreenshot = gf_sys_clock_high_res() - sys_start;
 			printf("\t\tTIME SCREENSHOT : %llu\n", timeScreenshot);
-			im_num++;
+
 			
 			if (im_refJSON == 1){
 				imListStream << "{\"" << im_refJSON << "\":" << "\"im_" << im_num << ".png\", \"Since_open\": \"" << timeScreenshot - timeref << "\"}";
@@ -113,6 +116,11 @@ int main()
 				imListStream << ", {\"" << im_refJSON << "\":" << "\"im_" << im_num << ".png\", \"Since_open\": \"" << timeScreenshot - timeref << "\"}";
 			}
 			im_refJSON++;
+		}
+
+		if (printPNG){
+			testStream << "http://" << ipAddr << ":8080/output/im_" << im_num << ".png\n";
+			printPNG = false;
 		}
 
 		if ((i % 30 + 1) == 30){
@@ -134,6 +142,7 @@ int main()
 				muxer_open_segment(muxer, "output/public/output", "seg", seg_num);
 				timeref = gf_sys_clock_high_res() - sys_start;
 				printf("\t\t\t\tOpening segment time : %llu\n", timeref);
+				printPNG = true;
 			}
 
 			res = muxer_write_frame(muxer, i);
@@ -171,7 +180,6 @@ int main()
 				testStream << "http://" << ipAddr << ":8080/output/seg_" << seg_num << "_gpac.m4s\n";
 				testFile.open("output/public/output/playlist.txt");
 				if (testFile.is_open()){
-					printf("file open\n");
 					testFile << testStream.str();
 				}
 				

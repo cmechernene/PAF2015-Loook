@@ -2,7 +2,7 @@
 
 var static = require('node-static');
 
-var file = new static.Server('./public', {headers:{'Access-Control-Allow-Origin':'*'}});
+var file = new static.Server('./public', {headers:{'Access-Control-Allow-Origin':'*'}, cache:0});
 
 require('http').createServer(function (request, response) {
     file.serve(request, response, function (err, res) {
